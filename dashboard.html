@@ -135,6 +135,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .stage-note{font-size:10.5px;color:var(--muted);margin-top:8px}
 .print-option{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:8px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer}
 .print-option input{width:15px;height:15px;accent-color:var(--blue)}
+.porte-select{background:#fff;color:var(--navy);border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer}
 
 .tag-row{display:flex;gap:5px;flex-wrap:wrap}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:var(--radius-pill);background:#eef1f5;color:var(--navy)}
@@ -328,6 +329,11 @@ h1{margin:0;font-size:22px;font-weight:800}
         <input type="checkbox" id="bp-logo-toggle">
         Programa Brasil Mais Produtivo
       </label>
+      <select class="porte-select hidden" id="porte-select" title="Porte da empresa — define a carga horária de cada fase do B+P">
+        <option value="ME">ME — Microempresa (76h)</option>
+        <option value="EPP">EPP — Empresa de Pequeno Porte (106h)</option>
+        <option value="DEMAIS">Demais portes (116h)</option>
+      </select>
       <button class="btn" id="btn-emitir">Emitir relatório das visitas</button>
     </div>
   </header>
@@ -542,7 +548,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 <script type="module">
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
-import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION } from './js/stage-template.js';
+import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
 
@@ -1581,7 +1587,7 @@ function buildStageProgressGauges(){
 function renderPrint(){
   document.getElementById('print-h1').textContent = assessoriaRow.nome;
   document.getElementById('print-title-sub').textContent =
-    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
+    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
   document.getElementById('print-kpis').innerHTML = buildPrintKPIs();
   document.getElementById('print-chart-stages').innerHTML = buildStageBarChartSVG();
   document.getElementById('print-chart-stage-progress').innerHTML = buildStageProgressGauges();
@@ -1625,7 +1631,7 @@ function renderPrint(){
 function applyHeaderInfo(){
   document.getElementById('header-title').textContent = assessoriaRow.nome;
   document.getElementById('header-sub').textContent =
-    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
+    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
   document.getElementById('session-email').textContent = session.user.email;
   const roleBadge = document.getElementById('role-badge');
   roleBadge.textContent = isOwner ? 'Consultor' : 'Cliente (somente leitura)';
@@ -1637,11 +1643,13 @@ function applyHeaderInfo(){
   }
   document.getElementById('logo-bp-box').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
   document.getElementById('bp-logo-toggle').checked = Boolean(assessoriaRow.mostra_logo_bp);
+  document.getElementById('porte-select').value = assessoriaRow.porte || 'DEMAIS';
 }
 
 function applyRoleUI(){
   document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
   document.getElementById('bp-toggle-label').classList.toggle('hidden', !isOwner);
+  document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
 }
 
@@ -1649,12 +1657,37 @@ document.getElementById('bp-logo-toggle').addEventListener('change', async funct
   if(!isOwner) return;
   const checked = this.checked;
   document.getElementById('logo-bp-box').classList.toggle('hidden', !checked);
-  const { error } = await sb.from('assessorias').update({ mostra_logo_bp: checked }).eq('id', assessoriaId);
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ mostra_logo_bp: checked })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
   if(error){
     alert('Não foi possível salvar essa alteração: ' + error.message);
     return;
   }
   assessoriaRow.mostra_logo_bp = checked;
+  assessoriaRow.updated_at = updated.updated_at;
+  document.getElementById('porte-select').classList.toggle('hidden', !checked);
+});
+
+document.getElementById('porte-select').addEventListener('change', async function(){
+  if(!isOwner) return;
+  const porte = this.value;
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ porte })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
+  if(error){
+    alert('Não foi possível salvar essa alteração: ' + error.message);
+    return;
+  }
+  assessoriaRow.porte = porte;
+  assessoriaRow.updated_at = updated.updated_at;
+  state = applyPorteHours(state, porte);
+  applyHeaderInfo();
+  renderAll();
 });
 
 document.getElementById('plan-prev').addEventListener('click', () => {
