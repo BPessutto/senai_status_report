@@ -60,10 +60,12 @@
     </div>
     <div class="header-actions">
       <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
+      <button class="btn btn-ghost hidden" id="btn-ver-arquivadas">Ver arquivadas</button>
       <button class="btn btn-ghost" id="btn-logout">Sair</button>
     </div>
   </header>
 
+  <div id="grid-titulo" class="hidden" style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 -6px"></div>
   <div id="grid" class="grid"></div>
   <div id="empty-state" class="empty-state hidden"></div>
 
@@ -147,6 +149,7 @@
 
   let session = null;
   let isOwnerOfSomething = false;
+  let mostrarArquivadas = false;
   let editingAssessoriaId = null;
 
   function openEditModal(row){
@@ -206,6 +209,7 @@
         <a class="btn btn-primary btn-sm" href="dashboard.html?id=${row.id}">Abrir painel</a>
         ${isOwner ? `<button type="button" class="btn btn-sm" data-editar="${row.id}">✎ Editar</button>` : ''}
         ${isOwner ? `<button type="button" class="btn btn-sm" data-toggle-clients="${row.id}">Compartilhar com cliente</button>` : ''}
+        ${isOwner ? `<button type="button" class="btn btn-sm" data-arquivar="${row.id}">${row.ativo === false ? '↩ Desarquivar' : '🗄 Arquivar'}</button>` : ''}
       </div>
       ${isOwner ? `
       <div class="client-panel" id="clients-${row.id}">
@@ -222,6 +226,23 @@
 
     if (isOwner) {
       card.querySelector(`[data-editar="${row.id}"]`).addEventListener('click', () => openEditModal(row));
+      card.querySelector(`[data-arquivar="${row.id}"]`).addEventListener('click', async () => {
+        const arquivando = row.ativo !== false;
+        const confirmado = await showActionPanel({
+          title: arquivando ? 'Arquivar assessoria?' : 'Desarquivar assessoria?',
+          subtitle: arquivando
+            ? `"${row.nome}" sai da lista principal, mas nada é apagado — pode desarquivar quando quiser.`
+            : `"${row.nome}" volta a aparecer na lista principal.`,
+          actions: [
+            { label: arquivando ? 'Arquivar' : 'Desarquivar', style: 'primary', value: 'sim' },
+            { label: 'Cancelar', style: 'ghost', value: 'nao' }
+          ]
+        });
+        if (!confirmado || confirmado.action !== 'sim') return;
+        const { error } = await sb.from('assessorias').update({ ativo: !arquivando }).eq('id', row.id);
+        if (error) { alert('Não foi possível concluir: ' + error.message); return; }
+        loadAssessorias();
+      });
       const toggleBtn = card.querySelector(`[data-toggle-clients="${row.id}"]`);
       const panel = card.querySelector(`#clients-${row.id}`);
       const listEl = card.querySelector(`#list-clients-${row.id}`);
@@ -260,19 +281,33 @@
       return;
     }
 
-    if (!data.length) {
-      emptyState.innerHTML = 'Nenhuma assessoria encontrada. Clique em "+ Nova assessoria" acima para criar a primeira — ou, se você é cliente, peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
+    const ativas = data.filter(r => r.ativo !== false);
+    const arquivadas = data.filter(r => r.ativo === false);
+
+    const btnArquivadas = document.getElementById('btn-ver-arquivadas');
+    btnArquivadas.classList.toggle('hidden', !isOwnerOfSomething || !arquivadas.length);
+    btnArquivadas.textContent = mostrarArquivadas ? '‹ Ver ativas' : `Ver arquivadas (${arquivadas.length})`;
+
+    const listaAtual = mostrarArquivadas ? arquivadas : ativas;
+    const gridTitulo = document.getElementById('grid-titulo');
+    gridTitulo.textContent = mostrarArquivadas ? 'ASSESSORIAS ARQUIVADAS' : '';
+    gridTitulo.classList.toggle('hidden', !mostrarArquivadas);
+
+    if (!listaAtual.length) {
+      emptyState.innerHTML = mostrarArquivadas
+        ? 'Nenhuma assessoria arquivada.'
+        : 'Nenhuma assessoria encontrada. Clique em "+ Nova assessoria" acima para criar a primeira — ou, se você é cliente, peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
       emptyState.classList.remove('hidden');
       grid.innerHTML = '';
-      return;
+    } else {
+      emptyState.classList.add('hidden');
+      grid.innerHTML = '';
+      listaAtual.forEach(row => grid.appendChild(renderCard(row)));
     }
-    emptyState.classList.add('hidden');
-    grid.innerHTML = '';
-    data.forEach(row => grid.appendChild(renderCard(row)));
 
     const calendarioCard = document.getElementById('calendario-card');
-    if (isOwnerOfSomething) {
-      ownedAssessoriasSorted = data
+    if (isOwnerOfSomething && !mostrarArquivadas) {
+      ownedAssessoriasSorted = ativas
         .filter(r => r.owner_id === session.user.id)
         .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
       colorMap = new Map(ownedAssessoriasSorted.map((r,i) => [r.id, i]));
@@ -579,6 +614,11 @@
 
   document.getElementById('btn-ano-anterior').addEventListener('click', () => { calendarYear--; renderCalendario(); });
   document.getElementById('btn-ano-seguinte').addEventListener('click', () => { calendarYear++; renderCalendario(); });
+
+  document.getElementById('btn-ver-arquivadas').addEventListener('click', () => {
+    mostrarArquivadas = !mostrarArquivadas;
+    loadAssessorias();
+  });
 
   document.getElementById('btn-nova').addEventListener('click', () => {
     editingAssessoriaId = null;
