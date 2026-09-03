@@ -34,14 +34,16 @@ header{
   color:#fff; border-radius:var(--radius); padding:20px 24px;
   box-shadow:var(--shadow);
 }
-.top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
-.logo-group{display:flex;align-items:center;gap:8px}
+.top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px}
+.logo-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.logo-group-right{justify-self:end}
 .logo-box{background:#fff;border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center}
 .logo-box img{display:block}
 .logo-senai img{height:30px}
 .logo-bp img{height:30px}
 .logo-cliente img{height:44px;max-width:120px}
-.title-block{text-align:center;flex:1;min-width:240px}
+.title-block{text-align:center;min-width:0}
+@media(max-width:640px){.top{grid-template-columns:1fr}.logo-group-right{justify-self:start}}
 .eyebrow{font-size:11px;letter-spacing:1.5px;color:#c7d9ee;font-weight:700;margin-bottom:4px}
 h1{margin:0;font-size:22px;font-weight:800}
 .sub{font-size:12px;color:#dbeafe;margin-top:6px}
@@ -283,20 +285,20 @@ h1{margin:0;font-size:22px;font-weight:800}
     <div class="top">
       <div class="logo-group">
         <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
-        <div class="logo-box logo-bp hidden" id="logo-bp-box"><img src="assets/logo-bp.png" alt="Brasil Mais Produtivo"></div>
       </div>
       <div class="title-block">
         <div class="eyebrow">STATUS REPORT · ACOMPANHAMENTO DE CONSULTORIA</div>
         <h1 id="header-title">—</h1>
         <div class="sub" id="header-sub">—</div>
       </div>
-      <div class="logo-box logo-cliente hidden" id="logo-cliente-box"><img id="logo-cliente-img" alt="Logo do cliente"></div>
+      <div class="logo-group logo-group-right">
+        <div class="logo-box logo-bp hidden" id="logo-bp-box"><img src="assets/logo-bp.png" alt="Brasil Mais Produtivo"></div>
+        <div class="logo-box logo-cliente hidden" id="logo-cliente-box"><img id="logo-cliente-img" alt="Logo do cliente"></div>
+      </div>
     </div>
     <div class="header-actions">
       <button class="btn btn-primary hidden" id="btn-toggle-form">+ Registrar visita</button>
       <button class="btn" id="btn-exportar" title="Baixar uma cópia dos dados em JSON">↓ Baixar cópia (JSON)</button>
-      <button class="btn hidden" id="btn-importar" title="Restaurar dados a partir de um arquivo JSON">↑ Restaurar de arquivo</button>
-      <input type="file" id="backup-file-input" class="hidden" accept="application/json,.json">
       <label class="print-option" for="print-deliverables-toggle" title="Define se o relatório impresso mostrará a lista completa de entregáveis">
         <input type="checkbox" id="print-deliverables-toggle">
         Incluir entregáveis no relatório
@@ -555,34 +557,6 @@ function exportBackup(){
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-async function importBackup(file){
-  if (!file || !isOwner) return;
-  try{
-    const content = await file.text();
-    const parsed = JSON.parse(content);
-    const importedState = parsed && parsed.state ? parsed.state : parsed;
-    const valid = importedState && Array.isArray(importedState.etapas) && Array.isArray(importedState.visitas)
-      && importedState.visitas.every(v => v && v.id && v.etapaSnapshots && Array.isArray(v.resumo));
-    if(!valid) throw new Error('O arquivo não possui a estrutura esperada deste painel.');
-    const exportedAt = parsed && parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('pt-BR') : 'data não informada';
-    const ok = confirm(`Importar este backup (${exportedAt})?\n\nOs dados atuais desta assessoria serão substituídos pelas ${importedState.visitas.length} visita(s) do arquivo.`);
-    if(!ok) return;
-    state = importedState;
-    ensureProjectSchema();
-    normalizeVisitas();
-    recomputeEtapas();
-    expandedStages.clear();
-    renderFormEtapaOptions();
-    document.getElementById('print-deliverables-toggle').checked = Boolean(state.printSettings && state.printSettings.includeDeliverables);
-    renderAll();
-    alert('Backup importado com sucesso.');
-  }catch(error){
-    alert(`Não foi possível importar o backup. ${error.message || 'Verifique o arquivo selecionado.'}`);
-  }finally{
-    document.getElementById('backup-file-input').value = '';
-  }
 }
 
 function makeId(){
@@ -1375,7 +1349,6 @@ function applyHeaderInfo(){
 
 function applyRoleUI(){
   document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
-  document.getElementById('btn-importar').classList.toggle('hidden', !isOwner);
   document.getElementById('bp-toggle-label').classList.toggle('hidden', !isOwner);
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
 }
@@ -1435,10 +1408,6 @@ document.getElementById('field-etapa2-toggle').addEventListener('change', functi
   updateDailyHoursTotal();
 });
 document.getElementById('btn-exportar').addEventListener('click', exportBackup);
-document.getElementById('btn-importar').addEventListener('click', () => document.getElementById('backup-file-input').click());
-document.getElementById('backup-file-input').addEventListener('change', function(){
-  importBackup(this.files && this.files[0]);
-});
 document.getElementById('print-deliverables-toggle').addEventListener('change', function(){
   state.printSettings.includeDeliverables = this.checked;
   saveState();
