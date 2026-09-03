@@ -140,6 +140,15 @@ h1{margin:0;font-size:22px;font-weight:800}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:var(--radius-pill);background:#eef1f5;color:var(--navy)}
 
 .timeline{display:flex;overflow-x:auto;padding-top:8px;padding-bottom:4px}
+.stage-bars{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;gap:10px}
+.stage-bar-row{display:grid;grid-template-columns:60px 1fr 48px;align-items:center;gap:10px}
+.stage-bar-label{font-size:11px;font-weight:800;color:var(--navy)}
+.stage-bar-track-h{height:14px;background:#eef1f5;border-radius:var(--radius-pill);overflow:hidden}
+.stage-bar-fill-h{height:100%;border-radius:var(--radius-pill);transition:width .2s ease}
+.bar-fill-low{background:var(--blue)}
+.bar-fill-mid{background:var(--amber)}
+.bar-fill-done{background:var(--green)}
+.stage-bar-pct{font-size:11px;font-weight:800;color:var(--navy);text-align:right;font-variant-numeric:tabular-nums}
 .visit-node{position:relative;flex:1;min-width:170px;padding-top:20px}
 .visit-node::before{content:'';position:absolute;top:7px;left:0;right:0;height:2px;background:var(--border)}
 .visit-node.done::before{background:var(--blue)}
@@ -248,6 +257,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .plan-legend i.dot-divergente{background:var(--amberbg)}
 .plan-legend i.dot-atrasada{background:#fde2e1}
 .plan-legend i.dot-ocupada{background:#e2e8f0}
+.plan-legend i.dot-compensacao{background:#ede9fe}
 .plan-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eaf2fb;border:1px solid #bfd3e5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);font-weight:700}
 .btn-xs{padding:6px 10px;font-size:11px}
 .btn-danger{background:var(--danger);color:#fff}
@@ -267,6 +277,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .cal-divergente{background:var(--amberbg);color:var(--amber);font-weight:700;cursor:pointer}
 .cal-atrasada{background:#fde2e1;color:var(--danger);font-weight:700;cursor:pointer}
 .cal-ocupada{background:#e2e8f0;color:#475569;cursor:not-allowed;font-weight:700}
+.cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:not-allowed;font-weight:700}
 .cal-selected{box-shadow:inset 0 0 0 2px var(--blue)}
 .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
 .plan-summary{margin-top:10px;font-size:12px;color:var(--muted)}
@@ -305,7 +316,6 @@ h1{margin:0;font-size:22px;font-weight:800}
     </div>
     <div class="header-actions">
       <button class="btn btn-primary hidden" id="btn-toggle-form">+ Registrar visita</button>
-      <button class="btn" id="btn-exportar" title="Baixar uma cópia dos dados em JSON">↓ Baixar cópia (JSON)</button>
       <label class="print-option" for="print-deliverables-toggle" title="Define se o relatório impresso mostrará a lista completa de entregáveis">
         <input type="checkbox" id="print-deliverables-toggle">
         Incluir entregáveis no relatório
@@ -426,7 +436,6 @@ h1{margin:0;font-size:22px;font-weight:800}
         <div class="field">
           <label>Dias da semana</label>
           <div class="plan-weekdays">
-            <label><input type="checkbox" class="plan-weekday" value="0">Dom</label>
             <label><input type="checkbox" class="plan-weekday" value="1">Seg</label>
             <label><input type="checkbox" class="plan-weekday" value="2">Ter</label>
             <label><input type="checkbox" class="plan-weekday" value="3">Qua</label>
@@ -456,6 +465,7 @@ h1{margin:0;font-size:22px;font-weight:800}
       <span><i class="dot-divergente"></i>Divergente (horas diferentes)</span>
       <span><i class="dot-atrasada"></i>Planejada e não registrada</span>
       <span><i class="dot-ocupada"></i>Ocupado em outra assessoria</span>
+      <span><i class="dot-compensacao"></i>Compensação</span>
     </div>
     <div id="plan-bulk-bar" class="plan-bulk-bar hidden">
       <span id="plan-bulk-count">0 dia(s) selecionado(s)</span>
@@ -479,6 +489,7 @@ h1{margin:0;font-size:22px;font-weight:800}
   <div class="card no-print">
     <div class="card-title">Linha do tempo das visitas</div>
     <div class="timeline" id="timeline-track"></div>
+    <div id="stage-bars" class="stage-bars"></div>
   </div>
 
   <div class="card no-print">
@@ -527,6 +538,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
 import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION } from './js/stage-template.js';
+import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO } from './js/calendar-utils.js';
 
 document.getElementById('btn-logout').addEventListener('click', logout);
 
@@ -554,28 +566,26 @@ function saveState(){
   clearTimeout(saveDebounceTimer);
   setSaveStatus('Salvando…');
   saveDebounceTimer = setTimeout(async () => {
-    const { error } = await sb.from('assessorias').update({ data: state }).eq('id', assessoriaId);
-    setSaveStatus(error ? 'Erro ao salvar — verifique sua conexão' : 'Salvo');
+    const { data: updated, error } = await sb.from('assessorias')
+      .update({ data: state })
+      .eq('id', assessoriaId)
+      .eq('updated_at', assessoriaRow.updated_at)
+      .select('updated_at')
+      .maybeSingle();
+    if(error){
+      setSaveStatus('Erro ao salvar — verifique sua conexão');
+      return;
+    }
+    if(!updated){
+      setSaveStatus('Conflito ao salvar');
+      alert('Este projeto foi alterado em outro lugar (outra aba, outro consultor) enquanto você editava. Para não perder nada, recarregue a página (F5) e refaça a última alteração.');
+      return;
+    }
+    assessoriaRow.updated_at = updated.updated_at;
+    setSaveStatus('Salvo');
   }, 500);
 }
 
-function exportBackup(){
-  const payload = {
-    app: 'Painel de Assessorias — ' + (assessoriaRow ? assessoriaRow.nome : ''),
-    backupVersion: 1,
-    exportedAt: new Date().toISOString(),
-    state
-  };
-  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `Backup_${(assessoriaRow && assessoriaRow.nome || 'assessoria').replace(/[^a-z0-9]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 function makeId(){
   if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -594,11 +604,6 @@ function badgeHtml(status){
   return `<span class="badge" style="color:${s.color};background:${s.bg}">${s.label}</span>`;
 }
 function fmtPct(x){ return (x*100).toFixed(1).replace('.', ','); }
-function fmtDateBR(iso){
-  if(!iso) return '—';
-  const [y,m,d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = String(str == null ? '' : str);
@@ -911,24 +916,42 @@ function renderTimeline(){
       </div>`;
   }).join('');
   const nextEtapa = nextOpenEtapa();
-  const proxima = nextPlannedVisit();
-  const pendingNode = `<div class="visit-node pending">
+  const realizadas = new Set(state.visitas.map(v => v.dataISO));
+  const pendentes = state.visitasPlanejadas
+    .filter(p => !realizadas.has(p.dataISO))
+    .sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  const pendingNodes = pendentes.length ? pendentes.map((p,i) => `<div class="visit-node pending">
+      <div class="visit-dot"></div>
+      <div class="visit-card pending-card">
+        <div class="visit-num">${i === 0 ? 'PRÓXIMA VISITA' : 'PLANEJADA'}</div>
+        <div class="visit-date">${fmtDateBR(p.dataISO)}</div>
+        <div class="visit-time">${p.horas}h planejadas</div>
+        ${tagRowHtml(nextEtapa ? [nextEtapa.id] : [])}
+      </div>
+    </div>`).join('') : `<div class="visit-node pending">
       <div class="visit-dot"></div>
       <div class="visit-card pending-card">
         <div class="visit-num">PRÓXIMA VISITA</div>
-        <div class="visit-date">${proxima ? fmtDateBR(proxima.dataISO) : 'a agendar'}</div>
-        ${proxima ? `<div class="visit-time">${proxima.horas}h planejadas</div>` : ''}
+        <div class="visit-date">a agendar</div>
         ${tagRowHtml(nextEtapa ? [nextEtapa.id] : [])}
       </div>
     </div>`;
-  track.innerHTML = nodes + pendingNode;
+  track.innerHTML = nodes + pendingNodes;
+  renderStageBars();
 }
 
-function nextPlannedVisit(){
-  const realizadas = new Set(state.visitas.map(v => v.dataISO));
-  return state.visitasPlanejadas
-    .filter(p => !realizadas.has(p.dataISO))
-    .sort((a,b) => a.dataISO.localeCompare(b.dataISO))[0] || null;
+function renderStageBars(){
+  const wrap = document.getElementById('stage-bars');
+  if(!wrap) return;
+  wrap.innerHTML = state.etapas.map(e => {
+    const pct = e.prev > 0 ? Math.min(1, e.real/e.prev) : 0;
+    const corClasse = pct >= 1 ? 'bar-fill-done' : pct >= 0.5 ? 'bar-fill-mid' : 'bar-fill-low';
+    return `<div class="stage-bar-row">
+        <div class="stage-bar-label">${escapeHtml(e.curto)}</div>
+        <div class="stage-bar-track-h"><div class="stage-bar-fill-h ${corClasse}" style="width:${(pct*100).toFixed(1)}%"></div></div>
+        <div class="stage-bar-pct">${fmtPct(pct)}%</div>
+      </div>`;
+  }).join('');
 }
 
 function renderArchive(){
@@ -957,14 +980,11 @@ function renderArchive(){
   }).join('');
 }
 
-const WEEKDAY_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let planCalendarBase = null;
 let outrasAssessorias = [];
+let compensacoes = [];
 let selectionMode = false;
 const selectedDates = new Set();
-
-function todayISO(){ return new Date().toISOString().slice(0,10); }
 
 function actualHoursOnDate(iso){
   return state.visitas.filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
@@ -998,15 +1018,19 @@ function otherAssessoriaBusyInfo(iso){
   return null;
 }
 
-function buildMonthGrid(year, month){
-  const first = new Date(year, month, 1);
-  const startWeekday = first.getDay();
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  const cells = [];
-  for(let i=0;i<startWeekday;i++) cells.push(null);
-  for(let d=1; d<=daysInMonth; d++) cells.push(d);
-  while(cells.length % 7 !== 0) cells.push(null);
-  return cells;
+function compensacaoInfo(iso){
+  return compensacoes.find(c => c.data_iso === iso) || null;
+}
+
+function planningBlockReason(iso){
+  const local = dayStateFor(iso);
+  if(local && (local.type === 'ok' || local.type === 'divergente' || local.type === 'realizada-avulsa')) return 'Já existe uma visita registrada nesta assessoria nesse dia.';
+  if(local && (local.type === 'planejada' || local.type === 'atrasada')) return 'Já existe uma visita planejada nesta assessoria nesse dia.';
+  const busy = otherAssessoriaBusyInfo(iso);
+  if(busy) return `Você já está na assessoria "${busy.nome}" nesse dia (${busy.horas}h).`;
+  const comp = compensacaoInfo(iso);
+  if(comp) return `Esse dia está marcado como compensação${comp.motivo ? ' ('+comp.motivo+')' : ''}.`;
+  return null;
 }
 
 function renderMonthCard(year, month){
@@ -1017,9 +1041,10 @@ function renderMonthCard(year, month){
     const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const info = dayStateFor(iso);
     const busy = !info ? otherAssessoriaBusyInfo(iso) : null;
+    const comp = (!info && !busy) ? compensacaoInfo(iso) : null;
     const isToday = iso === today;
     const isSelected = selectedDates.has(iso);
-    const typeClass = info ? 'cal-'+info.type : (busy ? 'cal-ocupada' : '');
+    const typeClass = info ? 'cal-'+info.type : (busy ? 'cal-ocupada' : (comp ? 'cal-compensacao' : ''));
     const cls = 'cal-cell' + (typeClass ? ' '+typeClass : '') + (isToday ? ' cal-today' : '') + (isSelected ? ' cal-selected' : '');
     const title = info
       ? (info.type === 'divergente' ? `Planejado ${info.planned}h · Registrado ${info.actual}h`
@@ -1029,7 +1054,9 @@ function renderMonthCard(year, month){
         : `Visita registrada: ${info.actual}h`)
       : busy
         ? `Ocupado na assessoria "${busy.nome}": ${busy.horas}h · carga horária total ${busy.totalPrevisto}h`
-        : '';
+        : comp
+          ? `Compensação${comp.motivo ? ': '+comp.motivo : ''}`
+          : '';
     return `<div class="${cls}" data-date="${iso}" title="${escapeAttr(title)}">${d}</div>`;
   }).join('');
   return `<div class="cal-month">
@@ -1072,6 +1099,20 @@ function renderPlanejamento(){
     `Planejado: <strong>${totalPlanejado}h</strong> em ${state.visitasPlanejadas.length} visita(s) · Realizado: <strong>${totalReal}h</strong> · Previsto: <strong>${state.totalPrevisto}h</strong>${alertHtml}`;
 }
 
+function reagendarEntrada(entrada, deISO){
+  const respostaData = prompt(`Reagendar a visita de ${fmtDateBR(deISO)} (${entrada.horas}h) para qual data?`, fmtDateBR(deISO));
+  if(respostaData === null) return;
+  const novaISO = parseBRDateToISO(respostaData);
+  if(!novaISO){ alert('Data inválida. Use o formato DD/MM/AAAA.'); return; }
+  if(novaISO === deISO) return;
+  const motivo = planningBlockReason(novaISO);
+  if(motivo){ alert(`Não é possível reagendar para essa data: ${motivo}`); return; }
+  entrada.dataISO = novaISO;
+  state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  renderPlanejamento();
+  saveState();
+}
+
 function onCalendarDayClick(iso){
   if(!isOwner) return;
   const info = dayStateFor(iso);
@@ -1081,9 +1122,9 @@ function onCalendarDayClick(iso){
       alert('Este dia já tem visita registrada — não pode ser selecionado em massa.');
       return;
     }
-    const busy = !info ? otherAssessoriaBusyInfo(iso) : null;
-    if(busy){
-      alert(`Você já está planejado na assessoria "${busy.nome}" nesse dia (${busy.horas}h) — não é possível selecionar.`);
+    const motivoBloqueio = !info ? planningBlockReason(iso) : null;
+    if(motivoBloqueio){
+      alert(`Não é possível selecionar: ${motivoBloqueio}`);
       return;
     }
     if(selectedDates.has(iso)) selectedDates.delete(iso); else selectedDates.add(iso);
@@ -1096,15 +1137,21 @@ function onCalendarDayClick(iso){
     return;
   }
   if(info && (info.type === 'planejada' || info.type === 'atrasada')){
+    const querReagendar = confirm(`Este dia está planejado (${info.planned}h).\n\nOK = Reagendar para outra data\nCancelar = ver opção de remover`);
+    if(querReagendar){
+      const entrada = state.visitasPlanejadas.find(p => p.dataISO === iso);
+      if(entrada) reagendarEntrada(entrada, iso);
+      return;
+    }
     if(!confirm(`Remover o planejamento de ${fmtDateBR(iso)} (${info.planned}h)?`)) return;
     state.visitasPlanejadas = state.visitasPlanejadas.filter(p => p.dataISO !== iso);
     renderPlanejamento();
     saveState();
     return;
   }
-  const busy = otherAssessoriaBusyInfo(iso);
-  if(busy){
-    alert(`Não é possível planejar aqui: você já está na assessoria "${busy.nome}" nesse dia (${busy.horas}h de ${busy.totalPrevisto}h previstas).`);
+  const motivoBloqueio = planningBlockReason(iso);
+  if(motivoBloqueio){
+    alert(`Não é possível planejar aqui: ${motivoBloqueio}`);
     return;
   }
   const answer = prompt(`Planejar visita em ${fmtDateBR(iso)} — quantas horas?`, '8');
@@ -1195,7 +1242,7 @@ function gerarDatasPlanejadas(){
     guard++;
     const iso = cursor.toISOString().slice(0,10);
     if(dias.includes(cursor.getDay()) && !existentes.has(iso)){
-      if(otherAssessoriaBusyInfo(iso)){
+      if(otherAssessoriaBusyInfo(iso) || compensacaoInfo(iso)){
         existentes.add(iso);
         puladasPorConflito++;
       } else {
@@ -1537,7 +1584,6 @@ document.getElementById('field-etapa2-toggle').addEventListener('change', functi
   document.getElementById('field-horas-etapa2').required = this.checked;
   updateDailyHoursTotal();
 });
-document.getElementById('btn-exportar').addEventListener('click', exportBackup);
 document.getElementById('print-deliverables-toggle').addEventListener('change', function(){
   state.printSettings.includeDeliverables = this.checked;
   saveState();
@@ -1641,6 +1687,8 @@ async function boot(){
   if(isOwner){
     const { data: outras } = await sb.from('assessorias').select('id,nome,data').eq('owner_id', session.user.id).neq('id', assessoriaId);
     outrasAssessorias = outras || [];
+    const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
+    compensacoes = comp || [];
   }
 
   ensureProjectSchema();
