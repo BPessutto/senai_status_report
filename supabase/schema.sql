@@ -53,6 +53,43 @@ before update on public.assessorias
 for each row execute function public.set_updated_at();
 
 -- ============================================================
+-- Funções auxiliares (SECURITY DEFINER)
+-- ============================================================
+-- As políticas de assessorias e assessoria_clientes precisam se checar
+-- mutuamente. Se isso for feito com subqueries diretas dentro das próprias
+-- políticas, o Postgres entra em recursão infinita (a política de uma
+-- tabela consulta a outra, que consulta a primeira de novo, sem parar).
+-- Encapsular a checagem em funções SECURITY DEFINER quebra esse loop: a
+-- função roda com o privilégio de quem a criou (dono das tabelas), então a
+-- consulta interna não reaciona o RLS.
+create or replace function public.is_assessoria_owner(target_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.assessorias a
+    where a.id = target_id and a.owner_id = auth.uid()
+  );
+$$;
+
+create or replace function public.has_client_access(target_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.assessoria_clientes ac
+    where ac.assessoria_id = target_id
+      and lower(ac.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  );
+$$;
+
+-- ============================================================
 -- Row Level Security
 -- ============================================================
 alter table public.assessorias enable row level security;
@@ -71,33 +108,15 @@ drop policy if exists "assessorias: client read access" on public.assessorias;
 create policy "assessorias: client read access"
   on public.assessorias
   for select
-  using (
-    exists (
-      select 1 from public.assessoria_clientes ac
-      where ac.assessoria_id = assessorias.id
-        and lower(ac.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-    )
-  );
+  using (public.has_client_access(id));
 
 -- Só o dono da assessoria pode gerenciar quem tem acesso de cliente a ela
 drop policy if exists "assessoria_clientes: owner manage" on public.assessoria_clientes;
 create policy "assessoria_clientes: owner manage"
   on public.assessoria_clientes
   for all
-  using (
-    exists (
-      select 1 from public.assessorias a
-      where a.id = assessoria_clientes.assessoria_id
-        and a.owner_id = auth.uid()
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.assessorias a
-      where a.id = assessoria_clientes.assessoria_id
-        and a.owner_id = auth.uid()
-    )
-  );
+  using (public.is_assessoria_owner(assessoria_id))
+  with check (public.is_assessoria_owner(assessoria_id));
 
 -- Fim do schema.
 -- Depois de rodar: vá em Authentication > Providers e confirme que "Email" está habilitado.
