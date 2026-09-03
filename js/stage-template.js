@@ -55,6 +55,7 @@ export function defaultState() {
     totalPrevisto: etapas.reduce((sum, e) => sum + Number(e.prev || 0), 0),
     etapas,
     visitas: [],
+    visitasPlanejadas: [],
     printSettings: { includeDeliverables: false }
   };
 }

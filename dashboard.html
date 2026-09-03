@@ -233,6 +233,35 @@ h1{margin:0;font-size:22px;font-weight:800}
   .print-footer{margin-top:18px;font-size:10px;color:var(--muted);text-align:right}
 }
 #print-report{display:none}
+
+.plan-generator-row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding-bottom:14px;border-bottom:1px dashed var(--border)}
+.plan-weekdays{display:flex;gap:8px;flex-wrap:wrap}
+.plan-weekdays label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--text);text-transform:none;cursor:pointer}
+.plan-weekdays input{width:14px;height:14px}
+.plan-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:10px}
+.plan-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.plan-legend i.dot-planejada{background:#dbeafe}
+.plan-legend i.dot-ok{background:var(--greenbg)}
+.plan-legend i.dot-divergente{background:var(--amberbg)}
+.plan-legend i.dot-atrasada{background:#fde2e1}
+.plan-nav{display:flex;justify-content:space-between;margin-bottom:10px}
+.plan-months{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.cal-month{border:1px solid var(--border);border-radius:10px;padding:10px;background:#fbfcfe}
+.cal-month-title{font-weight:800;color:var(--navy);text-align:center;margin-bottom:8px;font-size:13px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-grid-head{margin-bottom:4px}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:6px;color:var(--text)}
+.cal-head{font-weight:800;font-size:9.5px;color:var(--muted);text-transform:uppercase;aspect-ratio:auto}
+.cal-empty{background:transparent}
+.cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
+.cal-planejada{background:#dbeafe;color:#1e40af;cursor:pointer;font-weight:700}
+.cal-ok{background:var(--greenbg);color:var(--green);font-weight:700;cursor:pointer}
+.cal-realizada-avulsa{background:var(--greenbg);color:var(--green);font-weight:700;cursor:pointer}
+.cal-divergente{background:var(--amberbg);color:var(--amber);font-weight:700;cursor:pointer}
+.cal-atrasada{background:#fde2e1;color:var(--danger);font-weight:700;cursor:pointer}
+.cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
+.plan-summary{margin-top:10px;font-size:12px;color:var(--muted)}
+.plan-alert{color:var(--amber);font-weight:700;margin-left:8px}
 </style>
 </head>
 <body>
@@ -379,6 +408,47 @@ h1{margin:0;font-size:22px;font-weight:800}
         <button type="submit" class="btn btn-primary" id="btn-submit-visit">Salvar visita</button>
       </div>
     </form>
+  </div>
+
+  <div class="card no-print" id="plan-card">
+    <div class="card-title">Planejamento de visitas</div>
+    <div id="plan-generator" class="hidden">
+      <div class="plan-generator-row">
+        <div class="field">
+          <label>Dias da semana</label>
+          <div class="plan-weekdays">
+            <label><input type="checkbox" class="plan-weekday" value="0">Dom</label>
+            <label><input type="checkbox" class="plan-weekday" value="1">Seg</label>
+            <label><input type="checkbox" class="plan-weekday" value="2">Ter</label>
+            <label><input type="checkbox" class="plan-weekday" value="3">Qua</label>
+            <label><input type="checkbox" class="plan-weekday" value="4">Qui</label>
+            <label><input type="checkbox" class="plan-weekday" value="5">Sex</label>
+            <label><input type="checkbox" class="plan-weekday" value="6">Sáb</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="plan-inicio">A partir de</label>
+          <input type="date" id="plan-inicio">
+        </div>
+        <div class="field">
+          <label for="plan-horas">Horas por visita</label>
+          <input type="number" id="plan-horas" value="8" min="0.5" step="0.5">
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-gerar-datas">Gerar datas até completar a carga horária</button>
+      </div>
+    </div>
+    <div class="plan-legend">
+      <span><i class="dot-planejada"></i>Planejada</span>
+      <span><i class="dot-ok"></i>Concluída conforme planejado</span>
+      <span><i class="dot-divergente"></i>Divergente (horas diferentes)</span>
+      <span><i class="dot-atrasada"></i>Planejada e não registrada</span>
+    </div>
+    <div class="plan-nav">
+      <button type="button" class="stage-action" id="plan-prev">‹ Mês anterior</button>
+      <button type="button" class="stage-action" id="plan-next">Mês seguinte ›</button>
+    </div>
+    <div id="plan-months" class="plan-months"></div>
+    <div id="plan-summary" class="plan-summary"></div>
   </div>
 
   <div class="card no-print">
@@ -593,6 +663,7 @@ function ensureProjectSchema(){
     };
   });
   if(!Array.isArray(state.visitas)) state.visitas = [];
+  if(!Array.isArray(state.visitasPlanejadas)) state.visitasPlanejadas = [];
   state.schemaVersion = PROJECT_SCHEMA_VERSION;
   state.totalPrevisto = state.etapas.reduce((sum,e) => sum + Number(e.prev || 0), 0);
   state.printSettings = {...(state.printSettings || {}), includeDeliverables:Boolean(state.printSettings && state.printSettings.includeDeliverables)};
@@ -885,6 +956,158 @@ function renderArchive(){
   }).join('');
 }
 
+const WEEKDAY_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let planCalendarBase = null;
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+function actualHoursOnDate(iso){
+  return state.visitas.filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+}
+
+function dayStateFor(iso){
+  const planned = state.visitasPlanejadas.find(p => p.dataISO === iso);
+  const actual = actualHoursOnDate(iso);
+  if(planned && actual > 0){
+    return Math.abs(Number(planned.horas) - actual) < 0.01
+      ? { type:'ok', planned:planned.horas, actual }
+      : { type:'divergente', planned:planned.horas, actual };
+  }
+  if(planned && actual === 0){
+    return { type: iso < todayISO() ? 'atrasada' : 'planejada', planned: planned.horas };
+  }
+  if(!planned && actual > 0){
+    return { type:'realizada-avulsa', actual };
+  }
+  return null;
+}
+
+function buildMonthGrid(year, month){
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const cells = [];
+  for(let i=0;i<startWeekday;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  while(cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+function renderMonthCard(year, month){
+  const cells = buildMonthGrid(year, month);
+  const today = todayISO();
+  const cellsHtml = cells.map(d => {
+    if(d === null) return `<div class="cal-cell cal-empty"></div>`;
+    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const info = dayStateFor(iso);
+    const isToday = iso === today;
+    const cls = 'cal-cell' + (info ? ' cal-'+info.type : '') + (isToday ? ' cal-today' : '');
+    const title = !info ? ''
+      : info.type === 'divergente' ? `Planejado ${info.planned}h · Registrado ${info.actual}h`
+      : info.type === 'ok' ? `Concluída conforme planejado (${info.actual}h)`
+      : info.type === 'atrasada' ? `Planejada ${info.planned}h — data já passou sem visita registrada`
+      : info.type === 'planejada' ? `Planejada: ${info.planned}h`
+      : `Visita registrada: ${info.actual}h`;
+    return `<div class="${cls}" data-date="${iso}" title="${escapeAttr(title)}">${d}</div>`;
+  }).join('');
+  return `<div class="cal-month">
+      <div class="cal-month-title">${MONTH_NAMES[month]} ${year}</div>
+      <div class="cal-grid cal-grid-head">${WEEKDAY_LABELS.map(w=>`<div class="cal-cell cal-head">${w}</div>`).join('')}</div>
+      <div class="cal-grid">${cellsHtml}</div>
+    </div>`;
+}
+
+function renderPlanejamento(){
+  const wrap = document.getElementById('plan-months');
+  if(!wrap) return;
+  if(!planCalendarBase){
+    const t = new Date();
+    planCalendarBase = { year: t.getFullYear(), month: t.getMonth() };
+  }
+  let html = '';
+  for(let i=0;i<3;i++){
+    let y = planCalendarBase.year, m = planCalendarBase.month + i;
+    while(m > 11){ m -= 12; y += 1; }
+    html += renderMonthCard(y, m);
+  }
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('[data-date]').forEach(el => {
+    el.addEventListener('click', () => onCalendarDayClick(el.dataset.date));
+  });
+
+  const totalPlanejado = state.visitasPlanejadas.reduce((s,p) => s + Number(p.horas||0), 0);
+  const { totalReal } = computeTotals();
+  const diff = state.totalPrevisto - totalPlanejado;
+  const margem = Number(document.getElementById('plan-horas') && document.getElementById('plan-horas').value) || 8;
+  const alertHtml = Math.abs(diff) > margem
+    ? `<span class="plan-alert">⚠ ${diff > 0 ? `Faltam ${diff}h planejadas para cobrir o previsto` : `Planejado ${Math.abs(diff)}h a mais que o previsto`}</span>`
+    : '';
+  document.getElementById('plan-summary').innerHTML =
+    `Planejado: <strong>${totalPlanejado}h</strong> em ${state.visitasPlanejadas.length} visita(s) · Realizado: <strong>${totalReal}h</strong> · Previsto: <strong>${state.totalPrevisto}h</strong>${alertHtml}`;
+}
+
+function onCalendarDayClick(iso){
+  if(!isOwner) return;
+  const info = dayStateFor(iso);
+  if(info && (info.type === 'ok' || info.type === 'divergente' || info.type === 'realizada-avulsa')){
+    alert(`Este dia já tem visita registrada (${info.actual}h). Para editar, use o histórico de visitas abaixo.`);
+    return;
+  }
+  if(info && (info.type === 'planejada' || info.type === 'atrasada')){
+    if(!confirm(`Remover o planejamento de ${fmtDateBR(iso)} (${info.planned}h)?`)) return;
+    state.visitasPlanejadas = state.visitasPlanejadas.filter(p => p.dataISO !== iso);
+    renderPlanejamento();
+    saveState();
+    return;
+  }
+  const answer = prompt(`Planejar visita em ${fmtDateBR(iso)} — quantas horas?`, '8');
+  if(answer === null) return;
+  const horas = Number(String(answer).trim().replace(',','.'));
+  if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
+  state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas });
+  state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  renderPlanejamento();
+  saveState();
+}
+
+function gerarDatasPlanejadas(){
+  if(!isOwner) return;
+  const dias = Array.from(document.querySelectorAll('.plan-weekday:checked')).map(el => Number(el.value));
+  if(!dias.length){ alert('Selecione ao menos um dia da semana.'); return; }
+  const startISO = document.getElementById('plan-inicio').value || todayISO();
+  const horasPorVisita = Number(document.getElementById('plan-horas').value) || 8;
+  const { totalReal } = computeTotals();
+  const horasRestantes = Math.max(0, state.totalPrevisto - totalReal);
+  if(horasRestantes <= 0){ alert('Este projeto já atingiu a carga horária prevista — não há mais horas a planejar.'); return; }
+
+  const existentes = new Set([
+    ...state.visitasPlanejadas.map(p => p.dataISO),
+    ...state.visitas.map(v => v.dataISO)
+  ]);
+  let cursor = new Date(startISO + 'T00:00:00');
+  let acumulado = 0;
+  let guard = 0;
+  const novas = [];
+  while(acumulado < horasRestantes && guard < 2000){
+    guard++;
+    const iso = cursor.toISOString().slice(0,10);
+    if(dias.includes(cursor.getDay()) && !existentes.has(iso)){
+      novas.push({ id: makeId(), dataISO: iso, horas: horasPorVisita });
+      existentes.add(iso);
+      acumulado += horasPorVisita;
+    }
+    cursor.setDate(cursor.getDate()+1);
+  }
+  if(!novas.length){ alert('Nenhuma data nova foi gerada — verifique os dias da semana escolhidos.'); return; }
+  state.visitasPlanejadas.push(...novas);
+  state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  planCalendarBase = null;
+  renderPlanejamento();
+  saveState();
+  alert(`${novas.length} data(s) planejada(s) adicionada(s), somando ${acumulado}h.`);
+}
+
 function renderFormEtapaOptions(){
   const opts = state.etapas.map(e => `<option value="${e.id}">${etapaLabel(e.id)} — ${e.nome.split('— ')[1]}</option>`).join('');
   document.getElementById('field-etapa').innerHTML = opts;
@@ -996,6 +1219,7 @@ function renderAll(){
   renderEtapas();
   renderTimeline();
   renderArchive();
+  renderPlanejamento();
   saveState();
 }
 
@@ -1144,6 +1368,7 @@ function applyRoleUI(){
   document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
   document.getElementById('btn-importar').classList.toggle('hidden', !isOwner);
   document.getElementById('bp-toggle-label').classList.toggle('hidden', !isOwner);
+  document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
 }
 
 document.getElementById('bp-logo-toggle').addEventListener('change', async function(){
@@ -1157,6 +1382,20 @@ document.getElementById('bp-logo-toggle').addEventListener('change', async funct
   }
   assessoriaRow.mostra_logo_bp = checked;
 });
+
+document.getElementById('plan-prev').addEventListener('click', () => {
+  let { year, month } = planCalendarBase;
+  month -= 1; if(month < 0){ month = 11; year -= 1; }
+  planCalendarBase = { year, month };
+  renderPlanejamento();
+});
+document.getElementById('plan-next').addEventListener('click', () => {
+  let { year, month } = planCalendarBase;
+  month += 1; if(month > 11){ month = 0; year += 1; }
+  planCalendarBase = { year, month };
+  renderPlanejamento();
+});
+document.getElementById('btn-gerar-datas').addEventListener('click', gerarDatasPlanejadas);
 
 document.getElementById('btn-toggle-form').addEventListener('click', () => {
   if(!isOwner) return;
@@ -1261,6 +1500,7 @@ document.getElementById('visit-form').addEventListener('submit', (ev) => {
     });
   }
 
+  const dataVisita = fd.get('data');
   normalizeVisitas();
   recomputeEtapas();
   renderAll();
@@ -1269,6 +1509,11 @@ document.getElementById('visit-form').addEventListener('submit', (ev) => {
   document.getElementById('field-horas-etapa2').required = false;
   document.getElementById('form-card').classList.add('hidden');
   resetFormChrome();
+
+  const planejada = state.visitasPlanejadas.find(p => p.dataISO === dataVisita);
+  if(planejada && Math.abs(Number(planejada.horas) - totalHours) > 0.01){
+    alert(`Aviso: essa data estava planejada com ${planejada.horas}h e foram registradas ${totalHours}h no total. O planejamento não foi alterado — ajuste manualmente no calendário se quiser corrigir.`);
+  }
 });
 
 async function boot(){
@@ -1293,10 +1538,12 @@ async function boot(){
   renderFormEtapaOptions();
   normalizeVisitas();
   recomputeEtapas();
+  document.getElementById('plan-inicio').value = todayISO();
   renderKPIs();
   renderEtapas();
   renderTimeline();
   renderArchive();
+  renderPlanejamento();
   setSaveStatus(isOwner ? 'Sincronizado' : '');
 }
 
