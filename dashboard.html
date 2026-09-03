@@ -236,7 +236,8 @@ h1{margin:0;font-size:22px;font-weight:800}
 }
 #print-report{display:none}
 
-.plan-generator-row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding-bottom:14px;border-bottom:1px dashed var(--border)}
+.plan-generator-row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.plan-generator-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:1px dashed var(--border)}
 .plan-weekdays{display:flex;gap:8px;flex-wrap:wrap}
 .plan-weekdays label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--text);text-transform:none;cursor:pointer}
 .plan-weekdays input{width:14px;height:14px}
@@ -246,6 +247,10 @@ h1{margin:0;font-size:22px;font-weight:800}
 .plan-legend i.dot-ok{background:var(--greenbg)}
 .plan-legend i.dot-divergente{background:var(--amberbg)}
 .plan-legend i.dot-atrasada{background:#fde2e1}
+.plan-legend i.dot-ocupada{background:#e2e8f0}
+.plan-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eaf2fb;border:1px solid #bfd3e5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);font-weight:700}
+.btn-xs{padding:6px 10px;font-size:11px}
+.btn-danger{background:var(--danger);color:#fff}
 .plan-nav{display:flex;justify-content:space-between;margin-bottom:10px}
 .plan-months{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
 .cal-month{border:1px solid var(--border);border-radius:10px;padding:10px;background:#fbfcfe}
@@ -261,6 +266,8 @@ h1{margin:0;font-size:22px;font-weight:800}
 .cal-realizada-avulsa{background:var(--greenbg);color:var(--green);font-weight:700;cursor:pointer}
 .cal-divergente{background:var(--amberbg);color:var(--amber);font-weight:700;cursor:pointer}
 .cal-atrasada{background:#fde2e1;color:var(--danger);font-weight:700;cursor:pointer}
+.cal-ocupada{background:#e2e8f0;color:#475569;cursor:not-allowed;font-weight:700}
+.cal-selected{box-shadow:inset 0 0 0 2px var(--blue)}
 .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
 .plan-summary{margin-top:10px;font-size:12px;color:var(--muted)}
 .plan-alert{color:var(--amber);font-weight:700;margin-left:8px}
@@ -438,12 +445,23 @@ h1{margin:0;font-size:22px;font-weight:800}
         </div>
         <button type="button" class="btn btn-primary" id="btn-gerar-datas">Gerar datas até completar a carga horária</button>
       </div>
+      <div class="plan-generator-actions">
+        <button type="button" class="btn" id="btn-limpar-plan">Limpar planejamento</button>
+        <button type="button" class="btn" id="btn-selecionar-multiplos">☑ Selecionar vários dias</button>
+      </div>
     </div>
     <div class="plan-legend">
       <span><i class="dot-planejada"></i>Planejada</span>
       <span><i class="dot-ok"></i>Concluída conforme planejado</span>
       <span><i class="dot-divergente"></i>Divergente (horas diferentes)</span>
       <span><i class="dot-atrasada"></i>Planejada e não registrada</span>
+      <span><i class="dot-ocupada"></i>Ocupado em outra assessoria</span>
+    </div>
+    <div id="plan-bulk-bar" class="plan-bulk-bar hidden">
+      <span id="plan-bulk-count">0 dia(s) selecionado(s)</span>
+      <button type="button" class="btn btn-xs" id="btn-bulk-horas">Definir horas</button>
+      <button type="button" class="btn btn-xs btn-danger" id="btn-bulk-excluir">Excluir planejamento</button>
+      <button type="button" class="btn btn-xs" id="btn-bulk-cancelar">Cancelar seleção</button>
     </div>
     <div class="plan-nav">
       <button type="button" class="stage-action" id="plan-prev">‹ Mês anterior</button>
@@ -942,6 +960,9 @@ function renderArchive(){
 const WEEKDAY_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let planCalendarBase = null;
+let outrasAssessorias = [];
+let selectionMode = false;
+const selectedDates = new Set();
 
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
@@ -966,6 +987,17 @@ function dayStateFor(iso){
   return null;
 }
 
+function otherAssessoriaBusyInfo(iso){
+  for(const a of outrasAssessorias){
+    const d = a.data || {};
+    const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+    if(actual > 0) return { nome: a.nome, horas: actual, totalPrevisto: d.totalPrevisto };
+    const planned = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
+    if(planned) return { nome: a.nome, horas: planned.horas, totalPrevisto: d.totalPrevisto };
+  }
+  return null;
+}
+
 function buildMonthGrid(year, month){
   const first = new Date(year, month, 1);
   const startWeekday = first.getDay();
@@ -984,14 +1016,20 @@ function renderMonthCard(year, month){
     if(d === null) return `<div class="cal-cell cal-empty"></div>`;
     const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const info = dayStateFor(iso);
+    const busy = !info ? otherAssessoriaBusyInfo(iso) : null;
     const isToday = iso === today;
-    const cls = 'cal-cell' + (info ? ' cal-'+info.type : '') + (isToday ? ' cal-today' : '');
-    const title = !info ? ''
-      : info.type === 'divergente' ? `Planejado ${info.planned}h · Registrado ${info.actual}h`
-      : info.type === 'ok' ? `Concluída conforme planejado (${info.actual}h)`
-      : info.type === 'atrasada' ? `Planejada ${info.planned}h — data já passou sem visita registrada`
-      : info.type === 'planejada' ? `Planejada: ${info.planned}h`
-      : `Visita registrada: ${info.actual}h`;
+    const isSelected = selectedDates.has(iso);
+    const typeClass = info ? 'cal-'+info.type : (busy ? 'cal-ocupada' : '');
+    const cls = 'cal-cell' + (typeClass ? ' '+typeClass : '') + (isToday ? ' cal-today' : '') + (isSelected ? ' cal-selected' : '');
+    const title = info
+      ? (info.type === 'divergente' ? `Planejado ${info.planned}h · Registrado ${info.actual}h`
+        : info.type === 'ok' ? `Concluída conforme planejado (${info.actual}h)`
+        : info.type === 'atrasada' ? `Planejada ${info.planned}h — data já passou sem visita registrada`
+        : info.type === 'planejada' ? `Planejada: ${info.planned}h`
+        : `Visita registrada: ${info.actual}h`)
+      : busy
+        ? `Ocupado na assessoria "${busy.nome}": ${busy.horas}h · carga horária total ${busy.totalPrevisto}h`
+        : '';
     return `<div class="${cls}" data-date="${iso}" title="${escapeAttr(title)}">${d}</div>`;
   }).join('');
   return `<div class="cal-month">
@@ -1019,6 +1057,10 @@ function renderPlanejamento(){
     el.addEventListener('click', () => onCalendarDayClick(el.dataset.date));
   });
 
+  const bulkBar = document.getElementById('plan-bulk-bar');
+  bulkBar.classList.toggle('hidden', !selectionMode);
+  document.getElementById('plan-bulk-count').textContent = `${selectedDates.size} dia(s) selecionado(s)`;
+
   const totalPlanejado = state.visitasPlanejadas.reduce((s,p) => s + Number(p.horas||0), 0);
   const { totalReal } = computeTotals();
   const diff = state.totalPrevisto - totalPlanejado;
@@ -1033,6 +1075,22 @@ function renderPlanejamento(){
 function onCalendarDayClick(iso){
   if(!isOwner) return;
   const info = dayStateFor(iso);
+
+  if(selectionMode){
+    if(info && (info.type === 'ok' || info.type === 'divergente' || info.type === 'realizada-avulsa')){
+      alert('Este dia já tem visita registrada — não pode ser selecionado em massa.');
+      return;
+    }
+    const busy = !info ? otherAssessoriaBusyInfo(iso) : null;
+    if(busy){
+      alert(`Você já está planejado na assessoria "${busy.nome}" nesse dia (${busy.horas}h) — não é possível selecionar.`);
+      return;
+    }
+    if(selectedDates.has(iso)) selectedDates.delete(iso); else selectedDates.add(iso);
+    renderPlanejamento();
+    return;
+  }
+
   if(info && (info.type === 'ok' || info.type === 'divergente' || info.type === 'realizada-avulsa')){
     alert(`Este dia já tem visita registrada (${info.actual}h). Para editar, use o histórico de visitas abaixo.`);
     return;
@@ -1044,12 +1102,72 @@ function onCalendarDayClick(iso){
     saveState();
     return;
   }
+  const busy = otherAssessoriaBusyInfo(iso);
+  if(busy){
+    alert(`Não é possível planejar aqui: você já está na assessoria "${busy.nome}" nesse dia (${busy.horas}h de ${busy.totalPrevisto}h previstas).`);
+    return;
+  }
   const answer = prompt(`Planejar visita em ${fmtDateBR(iso)} — quantas horas?`, '8');
   if(answer === null) return;
   const horas = Number(String(answer).trim().replace(',','.'));
   if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
   state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas });
   state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  renderPlanejamento();
+  saveState();
+}
+
+function toggleSelectionMode(){
+  if(!isOwner) return;
+  selectionMode = !selectionMode;
+  if(!selectionMode) selectedDates.clear();
+  document.getElementById('btn-selecionar-multiplos').textContent = selectionMode ? '✕ Cancelar seleção múltipla' : '☑ Selecionar vários dias';
+  renderPlanejamento();
+}
+
+function bulkSetHours(){
+  if(!isOwner || !selectedDates.size) return;
+  const answer = prompt(`Definir quantas horas para os ${selectedDates.size} dia(s) selecionado(s):`, '8');
+  if(answer === null) return;
+  const horas = Number(String(answer).trim().replace(',','.'));
+  if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
+  selectedDates.forEach(iso => {
+    const existing = state.visitasPlanejadas.find(p => p.dataISO === iso);
+    if(existing) existing.horas = horas;
+    else state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas });
+  });
+  state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  selectedDates.clear();
+  selectionMode = false;
+  document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
+  renderPlanejamento();
+  saveState();
+}
+
+function bulkDelete(){
+  if(!isOwner || !selectedDates.size) return;
+  if(!confirm(`Remover o planejamento dos ${selectedDates.size} dia(s) selecionado(s)?`)) return;
+  state.visitasPlanejadas = state.visitasPlanejadas.filter(p => !selectedDates.has(p.dataISO));
+  selectedDates.clear();
+  selectionMode = false;
+  document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
+  renderPlanejamento();
+  saveState();
+}
+
+function cancelSelection(){
+  selectedDates.clear();
+  selectionMode = false;
+  document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
+  renderPlanejamento();
+}
+
+function limparPlanejamento(){
+  if(!isOwner) return;
+  if(!state.visitasPlanejadas.length){ alert('Não há nenhuma data planejada nesta assessoria.'); return; }
+  if(!confirm(`Remover todas as ${state.visitasPlanejadas.length} data(s) planejada(s) desta assessoria? Visitas já registradas não são afetadas.`)) return;
+  state.visitasPlanejadas = [];
+  selectedDates.clear();
   renderPlanejamento();
   saveState();
 }
@@ -1071,14 +1189,20 @@ function gerarDatasPlanejadas(){
   let cursor = new Date(startISO + 'T00:00:00');
   let acumulado = 0;
   let guard = 0;
+  let puladasPorConflito = 0;
   const novas = [];
   while(acumulado < horasRestantes && guard < 2000){
     guard++;
     const iso = cursor.toISOString().slice(0,10);
     if(dias.includes(cursor.getDay()) && !existentes.has(iso)){
-      novas.push({ id: makeId(), dataISO: iso, horas: horasPorVisita });
-      existentes.add(iso);
-      acumulado += horasPorVisita;
+      if(otherAssessoriaBusyInfo(iso)){
+        existentes.add(iso);
+        puladasPorConflito++;
+      } else {
+        novas.push({ id: makeId(), dataISO: iso, horas: horasPorVisita });
+        existentes.add(iso);
+        acumulado += horasPorVisita;
+      }
     }
     cursor.setDate(cursor.getDate()+1);
   }
@@ -1088,7 +1212,8 @@ function gerarDatasPlanejadas(){
   planCalendarBase = null;
   renderPlanejamento();
   saveState();
-  alert(`${novas.length} data(s) planejada(s) adicionada(s), somando ${acumulado}h.`);
+  const aviso = puladasPorConflito ? ` (${puladasPorConflito} data(s) foram puladas por já estarem ocupadas em outra assessoria)` : '';
+  alert(`${novas.length} data(s) planejada(s) adicionada(s), somando ${acumulado}h.${aviso}`);
 }
 
 function renderFormEtapaOptions(){
@@ -1378,6 +1503,11 @@ document.getElementById('plan-next').addEventListener('click', () => {
   renderPlanejamento();
 });
 document.getElementById('btn-gerar-datas').addEventListener('click', gerarDatasPlanejadas);
+document.getElementById('btn-limpar-plan').addEventListener('click', limparPlanejamento);
+document.getElementById('btn-selecionar-multiplos').addEventListener('click', toggleSelectionMode);
+document.getElementById('btn-bulk-horas').addEventListener('click', bulkSetHours);
+document.getElementById('btn-bulk-excluir').addEventListener('click', bulkDelete);
+document.getElementById('btn-bulk-cancelar').addEventListener('click', cancelSelection);
 
 document.getElementById('btn-toggle-form').addEventListener('click', () => {
   if(!isOwner) return;
@@ -1507,6 +1637,11 @@ async function boot(){
   assessoriaRow = data;
   isOwner = session.user.id === data.owner_id;
   state = data.data || {};
+
+  if(isOwner){
+    const { data: outras } = await sb.from('assessorias').select('id,nome,data').eq('owner_id', session.user.id).neq('id', assessoriaId);
+    outrasAssessorias = outras || [];
+  }
 
   ensureProjectSchema();
   applyHeaderInfo();
