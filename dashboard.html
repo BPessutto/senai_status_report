@@ -252,7 +252,7 @@ h1{margin:0;font-size:22px;font-weight:800}
     <div class="top">
       <div class="logo-group">
         <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
-        <div class="logo-box logo-bp"><img src="assets/logo-bp.png" alt="B+P"></div>
+        <div class="logo-box logo-bp hidden" id="logo-bp-box"><img src="assets/logo-bp.png" alt="Brasil Mais Produtivo"></div>
       </div>
       <div class="title-block">
         <div class="eyebrow">STATUS REPORT · ACOMPANHAMENTO DE CONSULTORIA</div>
@@ -269,6 +269,10 @@ h1{margin:0;font-size:22px;font-weight:800}
       <label class="print-option" for="print-deliverables-toggle" title="Define se o relatório impresso mostrará a lista completa de entregáveis">
         <input type="checkbox" id="print-deliverables-toggle">
         Incluir entregáveis no relatório
+      </label>
+      <label class="print-option hidden" id="bp-toggle-label" for="bp-logo-toggle" title="Mostra ou esconde o logo do Brasil Mais Produtivo neste projeto">
+        <input type="checkbox" id="bp-logo-toggle">
+        Programa Brasil Mais Produtivo
       </label>
       <button class="btn" id="btn-emitir">Emitir relatório das visitas</button>
     </div>
@@ -397,7 +401,7 @@ h1{margin:0;font-size:22px;font-weight:800}
         <h1 id="print-h1">—</h1>
         <div class="sub" id="print-title-sub"></div>
       </div>
-      <img src="assets/logo-bp.png" class="bmp" alt="B+P">
+      <img src="assets/logo-bp.png" class="bmp hidden" id="print-logo-bp" alt="Brasil Mais Produtivo">
     </div>
     <div class="print-kpis" id="print-kpis"></div>
     <div class="print-charts">
@@ -1080,6 +1084,7 @@ function renderPrint(){
   document.getElementById('print-kpis').innerHTML = buildPrintKPIs();
   document.getElementById('print-chart-stages').innerHTML = buildStageBarChartSVG();
   document.getElementById('print-chart-stage-progress').innerHTML = buildStageProgressGauges();
+  document.getElementById('print-logo-bp').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
   const includeDeliverables = Boolean(state.printSettings && state.printSettings.includeDeliverables);
   document.getElementById('print-stage-summary').innerHTML = state.etapas.map(e => {
     const hoursPct = e.prev > 0 ? e.real/e.prev : 0;
@@ -1129,12 +1134,27 @@ function applyHeaderInfo(){
     document.getElementById('logo-cliente-img').src = assessoriaRow.logo_url;
     document.getElementById('logo-cliente-box').classList.remove('hidden');
   }
+  document.getElementById('logo-bp-box').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
+  document.getElementById('bp-logo-toggle').checked = Boolean(assessoriaRow.mostra_logo_bp);
 }
 
 function applyRoleUI(){
   document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
   document.getElementById('btn-importar').classList.toggle('hidden', !isOwner);
+  document.getElementById('bp-toggle-label').classList.toggle('hidden', !isOwner);
 }
+
+document.getElementById('bp-logo-toggle').addEventListener('change', async function(){
+  if(!isOwner) return;
+  const checked = this.checked;
+  document.getElementById('logo-bp-box').classList.toggle('hidden', !checked);
+  const { error } = await sb.from('assessorias').update({ mostra_logo_bp: checked }).eq('id', assessoriaId);
+  if(error){
+    alert('Não foi possível salvar essa alteração: ' + error.message);
+    return;
+  }
+  assessoriaRow.mostra_logo_bp = checked;
+});
 
 document.getElementById('btn-toggle-form').addEventListener('click', () => {
   if(!isOwner) return;
