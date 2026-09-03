@@ -16,11 +16,6 @@
   .pct-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
   .card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
   .btn-sm{padding:7px 10px;font-size:11.5px}
-  .client-panel{border-top:1px dashed var(--border);padding-top:10px;margin-top:2px;display:none}
-  .client-panel.open{display:block}
-  .client-email-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #f1f4f8}
-  .client-email-row:last-child{border-bottom:0}
-  .link-btn{border:0;background:none;color:var(--danger);font-size:11px;font-weight:700;cursor:pointer}
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
   .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
   .modal-box{background:#fff;border-radius:var(--radius);padding:20px;max-width:420px;width:100%}
@@ -171,23 +166,6 @@
     document.getElementById('modal-nova').classList.add('hidden');
   }
 
-  async function loadClientEmails(assessoriaId, listEl){
-    const { data, error } = await sb.from('assessoria_clientes').select('*').eq('assessoria_id', assessoriaId).order('created_at');
-    if (error) { listEl.innerHTML = `<div class="muted">Não foi possível carregar.</div>`; return; }
-    if (!data.length) { listEl.innerHTML = `<div class="muted">Nenhum cliente com acesso ainda.</div>`; return; }
-    listEl.innerHTML = data.map(c => `
-      <div class="client-email-row">
-        <span>${c.email}</span>
-        <button type="button" class="link-btn" data-remove-client="${c.id}">remover</button>
-      </div>`).join('');
-    listEl.querySelectorAll('[data-remove-client]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await sb.from('assessoria_clientes').delete().eq('id', btn.dataset.removeClient);
-        loadClientEmails(assessoriaId, listEl);
-      });
-    });
-  }
-
   function renderCard(row){
     const isOwner = row.owner_id === session.user.id;
     const pct = computeProgress(row.data);
@@ -208,20 +186,8 @@
       <div class="card-actions">
         <a class="btn btn-primary btn-sm" href="dashboard.html?id=${row.id}">Abrir painel</a>
         ${isOwner ? `<button type="button" class="btn btn-sm" data-editar="${row.id}">✎ Editar</button>` : ''}
-        ${isOwner ? `<button type="button" class="btn btn-sm" data-toggle-clients="${row.id}">Compartilhar com cliente</button>` : ''}
         ${isOwner ? `<button type="button" class="btn btn-sm" data-arquivar="${row.id}">${row.ativo === false ? '↩ Desarquivar' : '🗄 Arquivar'}</button>` : ''}
       </div>
-      ${isOwner ? `
-      <div class="client-panel" id="clients-${row.id}">
-        <div class="field">
-          <label>E-mail do cliente autorizado</label>
-          <div style="display:flex;gap:6px">
-            <input type="email" id="input-client-${row.id}" placeholder="cliente@empresa.com" style="flex:1">
-            <button type="button" class="btn btn-sm" data-add-client="${row.id}">Convidar</button>
-          </div>
-        </div>
-        <div id="list-clients-${row.id}"></div>
-      </div>` : ''}
     `;
 
     if (isOwner) {
@@ -242,22 +208,6 @@
         const { error } = await sb.from('assessorias').update({ ativo: !arquivando }).eq('id', row.id);
         if (error) { alert('Não foi possível concluir: ' + error.message); return; }
         loadAssessorias();
-      });
-      const toggleBtn = card.querySelector(`[data-toggle-clients="${row.id}"]`);
-      const panel = card.querySelector(`#clients-${row.id}`);
-      const listEl = card.querySelector(`#list-clients-${row.id}`);
-      toggleBtn.addEventListener('click', () => {
-        panel.classList.toggle('open');
-        if (panel.classList.contains('open')) loadClientEmails(row.id, listEl);
-      });
-      card.querySelector(`[data-add-client="${row.id}"]`).addEventListener('click', async () => {
-        const input = card.querySelector(`#input-client-${row.id}`);
-        const email = input.value.trim();
-        if (!email) return;
-        const { error } = await sb.from('assessoria_clientes').insert({ assessoria_id: row.id, email });
-        if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
-        input.value = '';
-        loadClientEmails(row.id, listEl);
       });
     }
     return card;
