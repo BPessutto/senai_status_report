@@ -11,6 +11,7 @@ create table if not exists public.assessorias (
   owner_id uuid not null references auth.users(id) on delete cascade,
   nome text not null,
   cliente_nome text,
+  municipio text,
   proposta text,
   logo_url text,
   mostra_logo_bp boolean not null default true,
@@ -21,6 +22,30 @@ create table if not exists public.assessorias (
 );
 
 create index if not exists assessorias_owner_idx on public.assessorias (owner_id);
+
+-- ============================================================
+-- Dias de compensacao do consultor (bloqueio pessoal no calendario,
+-- nao pertence a nenhuma assessoria especifica)
+-- ============================================================
+create table if not exists public.compensacoes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  data_iso date not null,
+  motivo text,
+  created_at timestamptz not null default now(),
+  unique (owner_id, data_iso)
+);
+
+create index if not exists compensacoes_owner_idx on public.compensacoes (owner_id);
+
+alter table public.compensacoes enable row level security;
+
+drop policy if exists "compensacoes: owner full access" on public.compensacoes;
+create policy "compensacoes: owner full access"
+  on public.compensacoes
+  for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
 
 -- ============================================================
 -- E-mails de clientes autorizados a ver (somente leitura) uma assessoria
