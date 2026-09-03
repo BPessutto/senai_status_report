@@ -40,7 +40,36 @@ export const STAGE_DEFINITIONS = [
   }
 ];
 
-export function defaultState() {
+// Carga horária de cada fase, conforme o porte da empresa (regra de negócio do B+P).
+export const PORTE_HOURS = {
+  ME:     { T1: 16, T2: 40, T3: 16, T4: 4 },
+  EPP:    { T1: 16, T2: 64, T3: 18, T4: 8 },
+  DEMAIS: { T1: 20, T2: 70, T3: 18, T4: 8 }
+};
+
+export const PORTE_LABELS = {
+  ME: 'ME — Microempresa (76h)',
+  EPP: 'EPP — Empresa de Pequeno Porte (106h)',
+  DEMAIS: 'Demais portes (116h)'
+};
+
+// Reaplica a carga horária prevista de cada fase conforme o porte, sem tocar
+// em entregáveis, visitas ou horas já realizadas. Usado na criação e também
+// se o consultor corrigir o porte de uma assessoria já existente.
+export function applyPorteHours(data, porte) {
+  const horas = PORTE_HOURS[porte] || PORTE_HOURS.DEMAIS;
+  const etapas = (data.etapas || []).map(e => ({
+    ...e,
+    prev: horas[e.id] != null ? horas[e.id] : e.prev
+  }));
+  return {
+    ...data,
+    etapas,
+    totalPrevisto: etapas.reduce((sum, e) => sum + Number(e.prev || 0), 0)
+  };
+}
+
+export function defaultState(porte = 'DEMAIS') {
   const etapas = STAGE_DEFINITIONS.map(def => ({
     id: def.id,
     curto: def.curto,
@@ -48,9 +77,14 @@ export function defaultState() {
     prev: def.prev,
     real: 0,
     status: 'Não iniciado',
-    entregaveis: def.entregaveis.map(d => ({ ...d, locked: false, done: false }))
+    entregaveis: def.entregaveis.map(d => {
+      const item = { ...d, locked: false, done: false };
+      // MFV Estado Futuro é obrigatório só para "DEMAIS"; opcional para ME e EPP.
+      if (d.id === 'T2-D1') item.required = (porte === 'DEMAIS');
+      return item;
+    })
   }));
-  return {
+  const base = {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     totalPrevisto: etapas.reduce((sum, e) => sum + Number(e.prev || 0), 0),
     etapas,
@@ -58,4 +92,5 @@ export function defaultState() {
     visitasPlanejadas: [],
     printSettings: { includeDeliverables: false }
   };
+  return applyPorteHours(base, porte);
 }

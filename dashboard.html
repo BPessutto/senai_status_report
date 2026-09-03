@@ -1581,7 +1581,7 @@ function buildStageProgressGauges(){
 function renderPrint(){
   document.getElementById('print-h1').textContent = assessoriaRow.nome;
   document.getElementById('print-title-sub').textContent =
-    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
+    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
   document.getElementById('print-kpis').innerHTML = buildPrintKPIs();
   document.getElementById('print-chart-stages').innerHTML = buildStageBarChartSVG();
   document.getElementById('print-chart-stage-progress').innerHTML = buildStageProgressGauges();
@@ -1625,7 +1625,7 @@ function renderPrint(){
 function applyHeaderInfo(){
   document.getElementById('header-title').textContent = assessoriaRow.nome;
   document.getElementById('header-sub').textContent =
-    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
+    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
   document.getElementById('session-email').textContent = session.user.email;
   const roleBadge = document.getElementById('role-badge');
   roleBadge.textContent = isOwner ? 'Consultor' : 'Cliente (somente leitura)';

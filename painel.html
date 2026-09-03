@@ -96,6 +96,14 @@
         <input type="text" id="nova-municipio" placeholder="Ex.: Ribeirão Preto - SP">
       </div>
       <div class="field">
+        <label for="nova-porte">Porte da empresa (define a carga horária do B+P)</label>
+        <select id="nova-porte">
+          <option value="ME">ME — Microempresa (76h)</option>
+          <option value="EPP">EPP — Empresa de Pequeno Porte (106h)</option>
+          <option value="DEMAIS" selected>Demais portes (116h)</option>
+        </select>
+      </div>
+      <div class="field">
         <label for="nova-proposta">Nº da proposta (opcional)</label>
         <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
       </div>
@@ -112,7 +120,7 @@
 <script type="module">
   import { sb } from './js/supabase-client.js';
   import { requireSession, logout } from './js/session.js';
-  import { defaultState } from './js/stage-template.js';
+  import { defaultState, applyPorteHours } from './js/stage-template.js';
   import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex, nationalHolidayMap } from './js/calendar-utils.js';
   import { showActionPanel } from './js/action-panel.js';
 
@@ -147,20 +155,24 @@
   let isOwnerOfSomething = false;
   let mostrarArquivadas = false;
   let editingAssessoriaId = null;
+  let editingRow = null;
 
   function openEditModal(row){
     editingAssessoriaId = row.id;
+    editingRow = row;
     document.getElementById('modal-nova-titulo').textContent = 'Editar assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Salvar alterações';
     document.getElementById('nova-nome').value = row.nome || '';
     document.getElementById('nova-cliente').value = row.cliente_nome || '';
     document.getElementById('nova-municipio').value = row.municipio || '';
+    document.getElementById('nova-porte').value = row.porte || 'DEMAIS';
     document.getElementById('nova-proposta').value = row.proposta || '';
     document.getElementById('modal-nova').classList.remove('hidden');
   }
 
   function closeNovaModal(){
     editingAssessoriaId = null;
+    editingRow = null;
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
@@ -177,7 +189,7 @@
       <div>
         <span class="role-tag">${isOwner ? 'Você é o consultor' : 'Acesso de cliente (somente leitura)'}</span>
         <h3>${row.nome}</h3>
-        <div class="cliente">${row.cliente_nome || '—'}${row.municipio ? ' · ' + row.municipio : ''}${row.proposta ? ' · Proposta ' + row.proposta : ''}</div>
+        <div class="cliente">${row.cliente_nome || '—'}${row.municipio ? ' · ' + row.municipio : ''}${row.proposta ? ' · Proposta ' + row.proposta : ''}${row.porte ? ' · Porte ' + row.porte : ''}</div>
       </div>
       <div>
         <div class="pct-row"><span>Progresso</span><strong>${fmtPct(pct)}%</strong></div>
@@ -188,6 +200,7 @@
         <a class="btn btn-primary btn-sm" href="dashboard.html?id=${row.id}">Abrir painel</a>
         ${isOwner ? `<button type="button" class="btn btn-sm" data-editar="${row.id}">✎ Editar</button>` : ''}
         ${isOwner ? `<button type="button" class="btn btn-sm" data-arquivar="${row.id}">${row.ativo === false ? '↩ Desarquivar' : '🗄 Arquivar'}</button>` : ''}
+        ${isOwner ? `<button type="button" class="btn btn-sm btn-danger" data-apagar="${row.id}">🗑 Apagar</button>` : ''}
       </div>
     `;
 
@@ -208,6 +221,20 @@
         if (!confirmado || confirmado.action !== 'sim') return;
         const { error } = await sb.from('assessorias').update({ ativo: !arquivando }).eq('id', row.id);
         if (error) { alert('Não foi possível concluir: ' + error.message); return; }
+        loadAssessorias();
+      });
+      card.querySelector(`[data-apagar="${row.id}"]`).addEventListener('click', async () => {
+        const confirmado = await showActionPanel({
+          title: 'Apagar assessoria definitivamente?',
+          subtitle: `"${row.nome}" e todo o histórico de visitas, planejamento e entregáveis serão apagados para sempre. Essa ação não pode ser desfeita. Se não tem certeza, use "Arquivar" em vez disso.`,
+          actions: [
+            { label: 'Apagar definitivamente', style: 'danger', value: 'sim' },
+            { label: 'Cancelar', style: 'ghost', value: 'nao' }
+          ]
+        });
+        if (!confirmado || confirmado.action !== 'sim') return;
+        const { error } = await sb.from('assessorias').delete().eq('id', row.id);
+        if (error) { alert('Não foi possível apagar: ' + error.message); return; }
         loadAssessorias();
       });
     }
@@ -604,6 +631,7 @@
 
   document.getElementById('btn-nova').addEventListener('click', () => {
     editingAssessoriaId = null;
+    editingRow = null;
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
@@ -615,15 +643,23 @@
     const nome = document.getElementById('nova-nome').value.trim();
     const cliente_nome = document.getElementById('nova-cliente').value.trim();
     const municipio = document.getElementById('nova-municipio').value.trim();
+    const porte = document.getElementById('nova-porte').value;
     const proposta = document.getElementById('nova-proposta').value.trim();
 
     if (editingAssessoriaId) {
-      const { error } = await sb.from('assessorias').update({
+      const updatePayload = {
         nome,
         cliente_nome: cliente_nome || null,
         municipio: municipio || null,
-        proposta: proposta || null
-      }).eq('id', editingAssessoriaId);
+        proposta: proposta || null,
+        porte
+      };
+      // Porte mudou: recalcula a carga horária prevista de cada fase, sem
+      // mexer nas horas já realizadas nem nos entregáveis.
+      if (editingRow && (editingRow.porte || 'DEMAIS') !== porte) {
+        updatePayload.data = applyPorteHours(editingRow.data || {}, porte);
+      }
+      const { error } = await sb.from('assessorias').update(updatePayload).eq('id', editingAssessoriaId);
       if (error) { alert('Não foi possível salvar as alterações: ' + error.message); return; }
       closeNovaModal();
       loadAssessorias();
@@ -636,7 +672,8 @@
       cliente_nome: cliente_nome || null,
       municipio: municipio || null,
       proposta: proposta || null,
-      data: defaultState()
+      porte,
+      data: defaultState(porte)
     }).select().single();
     if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
     document.getElementById('modal-nova').classList.add('hidden');
