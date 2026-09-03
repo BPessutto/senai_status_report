@@ -65,12 +65,14 @@ h1{margin:0;font-size:22px;font-weight:800}
 .prazo-item .prazo-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
 .prazo-item .prazo-data{font-size:15px;font-weight:800;margin-bottom:4px}
 .prazo-item .prazo-msg{font-size:12px;line-height:1.4}
+.prazo-data-input{font:inherit;font-size:15px;font-weight:800;margin-bottom:4px;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:2px 5px;background:#fff;color:inherit;width:100%}
+.prazo-item .link-btn{margin-top:2px;display:inline-block}
 .prazo-ok{background:var(--greenbg);border-color:transparent}
-.prazo-ok .prazo-data,.prazo-ok .prazo-msg{color:var(--green)}
+.prazo-ok .prazo-data,.prazo-ok .prazo-msg,.prazo-ok .prazo-data-input{color:var(--green)}
 .prazo-atencao{background:var(--amberbg);border-color:transparent}
-.prazo-atencao .prazo-data,.prazo-atencao .prazo-msg{color:var(--amber)}
+.prazo-atencao .prazo-data,.prazo-atencao .prazo-msg,.prazo-atencao .prazo-data-input{color:var(--amber)}
 .prazo-vencido{background:#fde2e1;border-color:transparent}
-.prazo-vencido .prazo-data,.prazo-vencido .prazo-msg{color:var(--danger)}
+.prazo-vencido .prazo-data,.prazo-vencido .prazo-msg,.prazo-vencido .prazo-data-input{color:var(--danger)}
 .kpi small{display:block;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
 .kpi strong{font-size:24px;color:var(--navy);font-variant-numeric:tabular-nums}
 .kpi .note{font-size:11px;color:var(--muted);margin-top:5px}
@@ -1707,7 +1709,9 @@ function computePrazosBP(){
   const hoje = todayISO();
   const prazoApontamento = addDaysISO(contratacao, PRAZO_APONTAMENTO_DIAS);
   const prazoEducacional = addDaysISO(contratacao, PRAZO_EDUCACIONAL_DIAS);
-  const prazoEncerramento = addDaysISO(contratacao, PRAZO_ENCERRAMENTO_DIAS);
+  const prazoEncerramentoAuto = addDaysISO(contratacao, PRAZO_ENCERRAMENTO_DIAS);
+  const encerramentoManual = Boolean(assessoriaRow.prazo_encerramento_manual);
+  const prazoEncerramento = assessoriaRow.prazo_encerramento_manual || prazoEncerramentoAuto;
 
   const visitasRealizadas = (state.visitas || []).map(v => v.dataISO).sort();
   const primeiraVisita = visitasRealizadas[0] || null;
@@ -1764,8 +1768,28 @@ function computePrazosBP(){
   return [
     { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg },
     { label: 'Ações educacionais (30 dias)', prazo: prazoEducacional, status: educStatus, msg: educMsg },
-    { label: 'Encerramento da assessoria (16 semanas)', prazo: prazoEncerramento, status: encerramentoStatus, msg: encerramentoMsg }
+    {
+      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria (16 semanas)',
+      prazo: prazoEncerramento, auto: prazoEncerramentoAuto, manual: encerramentoManual,
+      status: encerramentoStatus, msg: encerramentoMsg
+    }
   ];
+}
+
+async function savePrazoEncerramentoManual(value){
+  if(!isOwner) return;
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ prazo_encerramento_manual: value })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
+  if(error){
+    alert('Não foi possível salvar essa alteração: ' + error.message);
+    return;
+  }
+  assessoriaRow.prazo_encerramento_manual = value;
+  assessoriaRow.updated_at = updated.updated_at;
+  renderPrazosBP();
 }
 
 function renderPrazosBP(){
@@ -1775,13 +1799,27 @@ function renderPrazosBP(){
     grid.innerHTML = '<div class="muted" style="font-size:12.5px">Informe a data de contratação para calcular os prazos.</div>';
     return;
   }
-  grid.innerHTML = prazos.map(p => `
+  const itemHtml = p => `
     <div class="prazo-item prazo-${p.status}">
       <div class="prazo-label">${escapeHtml(p.label)}</div>
       <div class="prazo-data">${fmtDateBR(p.prazo)}</div>
       <div class="prazo-msg">${escapeHtml(p.msg)}</div>
-    </div>
-  `).join('');
+    </div>`;
+  const [apontamento, educacional, encerramento] = prazos;
+  grid.innerHTML = itemHtml(apontamento) + itemHtml(educacional) + `
+    <div class="prazo-item prazo-${encerramento.status}">
+      <div class="prazo-label">${escapeHtml(encerramento.label)}</div>
+      <input type="date" class="prazo-data-input" id="field-prazo-encerramento" value="${encerramento.prazo}" ${isOwner ? '' : 'disabled'}>
+      <div class="prazo-msg">${escapeHtml(encerramento.msg)}</div>
+      ${encerramento.manual && isOwner ? `<button type="button" class="link-btn" id="btn-limpar-prazo-encerramento">Usar prazo automático (${fmtDateBR(encerramento.auto)})</button>` : ''}
+    </div>`;
+  if(isOwner){
+    document.getElementById('field-prazo-encerramento').addEventListener('change', function(){
+      savePrazoEncerramentoManual(this.value || null);
+    });
+    const btnLimpar = document.getElementById('btn-limpar-prazo-encerramento');
+    if(btnLimpar) btnLimpar.addEventListener('click', () => savePrazoEncerramentoManual(null));
+  }
 }
 
 document.getElementById('field-contratacao').addEventListener('change', async function(){
