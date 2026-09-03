@@ -188,7 +188,9 @@
       return;
     }
     isOwnerOfSomething = data.some(r => r.owner_id === session.user.id);
-    btnNova.classList.toggle('hidden', !isOwnerOfSomething);
+    // Sem nenhuma assessoria ainda não dá pra saber se é o consultor (primeiro acesso)
+    // ou um cliente sem convite — nesse caso deixamos o botão de criar visível também.
+    btnNova.classList.toggle('hidden', !isOwnerOfSomething && data.length > 0);
 
     // Cliente com acesso a exatamente uma assessoria: pula direto pro painel dela.
     if (!isOwnerOfSomething && data.length === 1) {
@@ -197,9 +199,7 @@
     }
 
     if (!data.length) {
-      emptyState.innerHTML = isOwnerOfSomething
-        ? 'Nenhuma assessoria cadastrada ainda.'
-        : 'Sua conta ainda não tem acesso a nenhuma assessoria. Peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
+      emptyState.innerHTML = 'Nenhuma assessoria encontrada. Clique em "+ Nova assessoria" acima para criar a primeira — ou, se você é cliente, peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
       emptyState.classList.remove('hidden');
       grid.innerHTML = '';
       return;
