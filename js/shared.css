@@ -1,0 +1,37 @@
+:root{
+  --navy:#17365d; --blue:#2f75b5; --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#64748b; --border:#d9e2ec;
+  --green:#2e7d32; --greenbg:#e8f5e9; --amber:#9a6700; --amberbg:#fff7d6; --purple:#6941c6; --purplebg:#f4f3ff;
+  --danger:#b42318;
+  --shadow:0 7px 22px rgba(15,23,42,.07); --radius:12px; --radius-sm:8px; --radius-pill:999px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+.hidden{display:none !important}
+.wrap{max-width:1080px;margin:28px auto;padding:0 16px}
+header{background:linear-gradient(110deg,var(--navy),#244f7c);color:#fff;border-radius:var(--radius);padding:20px 24px;box-shadow:var(--shadow)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.logo-group{display:flex;align-items:center;gap:8px}
+.logo-box{background:#fff;border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center}
+.logo-box img{display:block}
+.logo-senai img{height:26px}
+.logo-bp img{height:26px}
+.title-block{text-align:center;flex:1;min-width:240px}
+.eyebrow{font-size:11px;letter-spacing:1.5px;color:#c7d9ee;font-weight:700;margin-bottom:4px}
+h1{margin:0;font-size:22px;font-weight:800}
+.sub{font-size:12px;color:#dbeafe;margin-top:6px}
+.btn{border:0;border-radius:var(--radius-sm);padding:9px 14px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;background:#fff;color:var(--navy);display:inline-flex;align-items:center;gap:7px;transition:filter .12s ease,transform .05s ease}
+.btn:hover{filter:brightness(.96)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28)}
+.btn-danger{background:#fff;color:var(--danger)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-top:14px}
+.card-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+.field{display:flex;flex-direction:column;margin-bottom:12px}
+.field label{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13px;color:var(--text);background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.12)}
+.muted{color:var(--muted)}
+.error-box{background:var(--amberbg);color:var(--amber);border:1px solid #f0e0a8;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+.badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:var(--radius-pill);letter-spacing:.3px;white-space:nowrap}

@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Report · Painel de Assessoria</title>
+<style>
+:root{
+  --navy:#17365d; --blue:#2f75b5; --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#64748b; --border:#d9e2ec;
+  --green:#2e7d32; --greenbg:#e8f5e9; --amber:#9a6700; --amberbg:#fff7d6; --purple:#6941c6; --purplebg:#f4f3ff;
+  --danger:#b42318;
+  --shadow:0 7px 22px rgba(15,23,42,.07); --radius:12px; --radius-sm:8px; --radius-pill:999px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+.hidden{display:none !important}
+
+.wrap{max-width:1080px;margin:28px auto;padding:0 16px}
+
+.session-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.session-bar .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.session-bar .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.back-link{font-size:12.5px;font-weight:700;color:var(--navy);text-decoration:none}
+.back-link:hover{text-decoration:underline}
+.role-badge{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:4px 9px;border-radius:var(--radius-pill)}
+.role-badge.owner{color:var(--blue);background:#eaf2fb}
+.role-badge.client{color:var(--purple);background:var(--purplebg)}
+.save-status{font-size:11px;color:var(--muted)}
+.session-email{font-size:11.5px;color:var(--muted)}
+.btn-xs{padding:6px 10px;font-size:11px}
+
+header{
+  background:linear-gradient(110deg,var(--navy),#244f7c);
+  color:#fff; border-radius:var(--radius); padding:20px 24px;
+  box-shadow:var(--shadow);
+}
+.top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.logo-group{display:flex;align-items:center;gap:8px}
+.logo-box{background:#fff;border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center}
+.logo-box img{display:block}
+.logo-senai img{height:30px}
+.logo-bp img{height:30px}
+.logo-cliente img{height:44px;max-width:120px}
+.title-block{text-align:center;flex:1;min-width:240px}
+.eyebrow{font-size:11px;letter-spacing:1.5px;color:#c7d9ee;font-weight:700;margin-bottom:4px}
+h1{margin:0;font-size:22px;font-weight:800}
+.sub{font-size:12px;color:#dbeafe;margin-top:6px}
+.header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+.btn{
+  border:0;border-radius:var(--radius-sm);padding:9px 14px;font-weight:700;font-size:12.5px;
+  cursor:pointer;font-family:inherit;background:#fff;color:var(--navy);
+  display:inline-flex;align-items:center;gap:7px;transition:filter .12s ease,transform .05s ease;
+}
+.btn:hover{filter:brightness(.96)}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-ghost{background:#eaf2f8;color:var(--navy)}
+
+.kpi-row{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:12px;margin-top:16px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px}
+.kpi small{display:block;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+.kpi strong{font-size:24px;color:var(--navy);font-variant-numeric:tabular-nums}
+.kpi .note{font-size:11px;color:var(--muted);margin-top:5px}
+.gauge-kpi{display:flex;align-items:center;gap:14px}
+.gauge-kpi svg{flex-shrink:0}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-top:14px}
+.card-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+.card-title-left{display:flex;align-items:center;gap:8px}
+.card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.field{display:flex;flex-direction:column}
+.field.span-3{grid-column:span 3}
+.field label{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.field input, .field select, .field textarea{
+  border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13px;color:var(--text);background:#fff;
+}
+.field textarea{resize:vertical;min-height:90px}
+.field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.12)}
+.field input[readonly]{background:#eef3f8;color:var(--navy);font-weight:800;cursor:not-allowed}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.form-subblock{grid-column:span 3;border-top:1px dashed var(--border);margin-top:4px;padding-top:14px}
+.form-subblock-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.form-subblock-head input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
+.form-subblock-head label{font-size:11.5px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;margin:0;cursor:pointer}
+.form-subgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:720px){.form-grid{grid-template-columns:1fr 1fr}.field.span-3{grid-column:span 2}.form-subblock{grid-column:span 2}.form-subgrid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.form-grid{grid-template-columns:1fr}.field.span-3{grid-column:span 1}.form-subblock{grid-column:span 1}.form-subgrid{grid-template-columns:1fr}}
+
+.stage-row{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:#fbfcfe}
+.stage-row:last-child{margin-bottom:0}
+.stage-id{font-weight:800;font-size:16px;width:34px;color:var(--blue);flex-shrink:0}
+.stage-main{flex:1;min-width:0}
+.stage-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px}
+.stage-name{font-weight:700;font-size:14px;color:var(--text)}
+.badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:var(--radius-pill);letter-spacing:.3px;white-space:nowrap}
+.stage-bar-track{height:9px;background:#eef1f5;border-radius:var(--radius-pill);overflow:hidden}
+.stage-bar-fill{height:100%;background:var(--blue);border-radius:var(--radius-pill)}
+.stage-meta{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums}
+.stage-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+.progress-box{border:1px solid #e5ebf3;border-radius:9px;background:#fff;padding:11px 12px}
+.progress-label{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.35px;margin-bottom:7px}
+.progress-label strong{font-size:12px;color:var(--navy);text-transform:none;letter-spacing:0}
+.deliverable-bar-fill{background:var(--green)}
+.stage-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.stage-action{border:1px solid var(--border);background:#fff;color:var(--navy);border-radius:7px;padding:7px 10px;font:700 11px/1 "Segoe UI",Arial,sans-serif;cursor:pointer}
+.stage-action:hover{background:#eef5fb;border-color:#bfd3e5}
+.stage-action .chevron{display:inline-block;margin-right:5px;transition:transform .16s ease}
+.stage-action[aria-expanded="true"] .chevron{transform:rotate(90deg)}
+.deliverables-panel{margin-top:12px;border-top:1px dashed var(--border);padding-top:12px}
+.deliverables-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+.deliverables-head strong{font-size:12px;color:var(--navy)}
+.deliverable-list{display:grid;gap:7px}
+.deliverable-item{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;border:1px solid #e5ebf3;border-radius:8px;background:#fff;padding:9px 10px}
+.deliverable-item.done{background:#f2faf3;border-color:#cfe6d1}
+.deliverable-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
+.deliverable-text{font-size:12px;line-height:1.35}
+.deliverable-text strong{color:var(--navy)}
+.required-pill,.optional-pill{font-size:9px;font-weight:800;padding:3px 7px;border-radius:999px;white-space:nowrap;text-transform:uppercase}
+.required-pill{color:#8a4b00;background:#fff2cc}
+.optional-pill{color:var(--muted);background:#eef1f5}
+.deliverable-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.item-action{border:0;background:transparent;padding:4px 2px;color:var(--blue);font:700 10.5px "Segoe UI",Arial,sans-serif;cursor:pointer}
+.item-action:hover{text-decoration:underline}
+.item-action-danger{color:var(--danger)}
+.deliverable-editor{display:grid;grid-template-columns:110px minmax(180px,1fr);gap:7px}
+.deliverable-editor input[type=text]{width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 8px;font:12px "Segoe UI",Arial,sans-serif}
+.deliverable-editor input[type=text]:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.1)}
+.deliverable-editor .editor-note{grid-column:1/-1}
+.editor-required{grid-column:1/-1;display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;color:var(--navy);cursor:pointer}
+.editor-required input{width:15px !important;height:15px !important}
+.stage-note{font-size:10.5px;color:var(--muted);margin-top:8px}
+.print-option{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:8px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer}
+.print-option input{width:15px;height:15px;accent-color:var(--blue)}
+
+.tag-row{display:flex;gap:5px;flex-wrap:wrap}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:var(--radius-pill);background:#eef1f5;color:var(--navy)}
+
+.timeline{display:flex;overflow-x:auto;padding-top:8px;padding-bottom:4px}
+.visit-node{position:relative;flex:1;min-width:170px;padding-top:20px}
+.visit-node::before{content:'';position:absolute;top:7px;left:0;right:0;height:2px;background:var(--border)}
+.visit-node.done::before{background:var(--blue)}
+.visit-node:first-child::before{left:50%}
+.visit-node:last-child::before{right:50%}
+.visit-dot{position:absolute;top:2px;left:50%;transform:translateX(-50%);width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid var(--blue);z-index:1}
+.visit-node.pending .visit-dot{border-color:#98a2b3}
+.visit-card{margin:0 7px;padding:11px 12px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fbfcfe;text-align:center}
+.pending-card{border-style:dashed;background:transparent}
+.visit-num{font-size:9.5px;font-weight:800;letter-spacing:1px;color:var(--blue);margin-bottom:4px}
+.pending-card .visit-num{color:var(--muted)}
+.visit-date{font-weight:800;font-size:14px;margin-bottom:2px;color:var(--navy)}
+.visit-time{font-size:10.5px;color:var(--muted);margin-bottom:6px}
+.visit-card .tag-row{justify-content:center;margin-bottom:5px}
+.visit-acc{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.archive-card{display:grid;grid-template-columns:200px 1fr;gap:16px;border-top:1px solid var(--border);padding:16px 0}
+.archive-card:first-child{border-top:none;padding-top:0}
+.archive-side{border-left:3px solid var(--blue);padding-left:14px}
+.archive-num{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--blue)}
+.archive-date{font-weight:800;font-size:16px;color:var(--navy);margin-top:2px}
+.archive-hours{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.archive-side .tag-row{margin-top:8px}
+.archive-actions{display:flex;gap:10px;margin-top:10px}
+.link-btn{border:0;background:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:0}
+.link-btn:hover{text-decoration:underline}
+.link-btn-danger{color:var(--danger)}
+.archive-text p{font-size:13px;line-height:1.6;margin:0 0 10px;color:#222}
+.archive-text p:last-child{margin-bottom:0}
+.archive-latest{background:#f3f8fd;border-radius:var(--radius-sm);margin:0 -10px;padding:16px 10px !important}
+
+@media(max-width:720px){
+  .kpi-row{grid-template-columns:1fr 1fr}
+  .archive-card{grid-template-columns:1fr}
+  .archive-side{border-left:none;border-top:3px solid var(--blue);padding-left:0;padding-top:10px}
+  .stage-summary{grid-template-columns:1fr}
+  .deliverable-item{grid-template-columns:22px 1fr}
+  .deliverable-actions{grid-column:2;justify-content:flex-start}
+  .deliverable-editor{grid-template-columns:1fr}
+  .deliverable-editor .editor-note,.editor-required{grid-column:1}
+}
+
+@media print{
+  body{background:#fff}
+  .no-print{display:none !important}
+  #print-report{display:block !important}
+  .print-header{display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px}
+  .print-header img{height:30px}
+  .print-title{text-align:center}
+  .print-title h1{margin:0;font-size:19px;color:var(--navy)}
+  .print-title .sub{font-size:11px;color:var(--muted);margin-top:4px}
+  .print-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+  .print-kpi{border:1px solid var(--border);border-radius:8px;padding:9px 11px}
+  .print-kpi small{display:block;font-size:8.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+  .print-kpi strong{font-size:17px;color:var(--navy);display:block;line-height:1.2}
+  .print-kpi span{font-size:9px;color:var(--muted)}
+  .print-kpi-progress{display:flex;align-items:center;gap:9px;padding:7px 10px}
+  .print-kpi-progress svg{width:48px;height:48px;flex:0 0 48px}
+  .print-kpi-progress small{margin-bottom:2px}
+  .print-kpi-progress strong{font-size:18px}
+  .print-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 18px}
+  .print-chart-box{border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  .print-chart-title{font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .print-legend{display:flex;gap:12px;margin-top:4px;font-size:9px;color:var(--muted)}
+  .print-legend span{display:inline-flex;align-items:center;gap:4px}
+  .print-legend i{width:7px;height:7px;border-radius:2px;display:inline-block}
+  .print-stage-gauges{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;min-height:210px;margin-top:2px}
+  .print-stage-gauge{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;padding:10px 8px}
+  .print-stage-gauge:nth-child(odd){border-right:1px solid #edf1f6}
+  .print-stage-gauge:nth-child(-n+2){border-bottom:1px solid #edf1f6}
+  .print-stage-gauge svg{width:72px;height:72px;flex:0 0 72px}
+  .print-stage-gauge-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.25px;white-space:nowrap}
+  .print-stage-gauge-value{font-size:18px;line-height:1.05;font-weight:800;color:var(--navy);margin-top:3px;font-variant-numeric:tabular-nums}
+  .print-stage-gauge-hours{font-size:8.5px;color:var(--muted);margin-top:3px;white-space:nowrap}
+  table.print-table{width:100%;border-collapse:collapse;margin:14px 0 22px;font-size:11px}
+  table.print-table th, table.print-table td{border:1px solid var(--border);padding:6px 8px;text-align:center}
+  table.print-table th{background:#eef1f5;color:var(--navy);font-size:10px;text-transform:uppercase}
+  .print-visit{border-top:1px solid var(--border);padding:12px 0}
+  .print-visit h3{margin:0 0 4px;font-size:13px;color:var(--navy)}
+  .print-visit-meta{font-size:10.5px;color:var(--muted);margin-bottom:8px}
+  .print-visit p{font-size:12px;line-height:1.6;margin:0 0 8px;color:#222}
+  .print-stage-section{margin:0 0 18px}
+  .print-section-title{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin:0 0 8px}
+  .print-stage-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .print-stage-card{border:1px solid var(--border);border-radius:8px;padding:9px 10px;break-inside:avoid}
+  .print-stage-card h3{font-size:11px;color:var(--navy);margin:0 0 5px}
+  .print-stage-metrics{font-size:9.5px;color:var(--muted);margin-bottom:6px}
+  .print-deliverables{margin:6px 0 0;padding-left:16px;font-size:9.5px;line-height:1.45}
+  .print-deliverables li.done{color:var(--green)}
+  .print-deliverables li.pending{color:#475569}
+  .print-footer{margin-top:18px;font-size:10px;color:var(--muted);text-align:right}
+}
+#print-report{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="session-bar no-print">
+    <div class="left">
+      <a class="back-link" href="painel.html">‹ Minhas assessorias</a>
+      <span class="role-badge hidden" id="role-badge"></span>
+    </div>
+    <div class="right">
+      <span class="session-email" id="session-email"></span>
+      <span class="save-status" id="save-status"></span>
+      <button class="btn btn-ghost btn-xs" id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <header class="no-print">
+    <div class="top">
+      <div class="logo-group">
+        <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
+        <div class="logo-box logo-bp"><img src="assets/logo-bp.png" alt="B+P"></div>
+      </div>
+      <div class="title-block">
+        <div class="eyebrow">STATUS REPORT · ACOMPANHAMENTO DE CONSULTORIA</div>
+        <h1 id="header-title">—</h1>
+        <div class="sub" id="header-sub">—</div>
+      </div>
+      <div class="logo-box logo-cliente hidden" id="logo-cliente-box"><img id="logo-cliente-img" alt="Logo do cliente"></div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary hidden" id="btn-toggle-form">+ Registrar visita</button>
+      <button class="btn" id="btn-exportar" title="Baixar uma cópia dos dados em JSON">↓ Baixar cópia (JSON)</button>
+      <button class="btn hidden" id="btn-importar" title="Restaurar dados a partir de um arquivo JSON">↑ Restaurar de arquivo</button>
+      <input type="file" id="backup-file-input" class="hidden" accept="application/json,.json">
+      <label class="print-option" for="print-deliverables-toggle" title="Define se o relatório impresso mostrará a lista completa de entregáveis">
+        <input type="checkbox" id="print-deliverables-toggle">
+        Incluir entregáveis no relatório
+      </label>
+      <button class="btn" id="btn-emitir">Emitir relatório das visitas</button>
+    </div>
+  </header>
+
+  <div class="kpi-row no-print">
+    <div class="kpi gauge-kpi">
+      <svg width="72" height="72" viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r="68" fill="none" stroke="#e5ebf3" stroke-width="12"/>
+        <circle id="gauge-fill" cx="80" cy="80" r="68" fill="none" stroke="var(--blue)" stroke-width="12"
+          stroke-linecap="round" transform="rotate(-90 80 80)"/>
+      </svg>
+      <div>
+        <small>PROGRESSO GERAL</small>
+        <strong id="kpi-progress-value">—</strong>
+      </div>
+    </div>
+    <div class="kpi">
+      <small>HORAS REALIZADAS</small>
+      <strong id="kpi-horas-real">—</strong> <span class="note" id="kpi-horas-note"></span>
+    </div>
+    <div class="kpi">
+      <small>ETAPA ATUAL</small>
+      <strong id="kpi-etapa-atual">—</strong> <span class="note" id="kpi-etapa-nome"></span>
+    </div>
+    <div class="kpi">
+      <small>STATUS DO PROJETO</small>
+      <div id="kpi-status-badge"></div>
+      <div class="note" id="kpi-status-note"></div>
+    </div>
+  </div>
+
+  <div class="card no-print hidden" id="form-card">
+    <div class="card-title"><span class="card-title-left"><span class="dot"></span><span id="form-title">REGISTRAR NOVA VISITA</span></span></div>
+    <form id="visit-form">
+      <div class="form-grid">
+        <div class="field">
+          <label for="field-data">Data da visita</label>
+          <input type="date" id="field-data" name="data" required>
+        </div>
+        <div class="field">
+          <label for="field-inicio">Horário início</label>
+          <input type="time" id="field-inicio" name="inicio" value="08:00">
+        </div>
+        <div class="field">
+          <label for="field-fim">Horário término</label>
+          <input type="time" id="field-fim" name="fim" value="17:00">
+        </div>
+        <div class="field">
+          <label for="field-horasdia">Total de horas da visita (calculado)</label>
+          <input type="number" id="field-horasdia" name="horasNoDia" min="0" step="0.5" readonly tabindex="-1">
+        </div>
+        <div class="field">
+          <label for="field-etapa">Etapa em foco</label>
+          <select id="field-etapa" name="etapa" required></select>
+        </div>
+        <div class="field">
+          <label for="field-status">Status da etapa</label>
+          <select id="field-status" name="status" required>
+            <option>Em andamento</option>
+            <option>Não iniciado</option>
+            <option>Concluído</option>
+            <option>Aguardando cliente</option>
+          </select>
+        </div>
+        <div class="field span-3">
+          <label for="field-horas-etapa">Horas desta visita destinadas à fase em foco</label>
+          <input type="number" id="field-horas-etapa" name="horasEtapa" min="0" step="0.5" required>
+        </div>
+        <div class="form-subblock">
+          <div class="form-subblock-head">
+            <input type="checkbox" id="field-etapa2-toggle">
+            <label for="field-etapa2-toggle">Esta visita também avançou outra etapa</label>
+          </div>
+          <div class="form-subgrid hidden" id="etapa2-fields">
+            <div class="field">
+              <label for="field-etapa2">Etapa adicional</label>
+              <select id="field-etapa2" name="etapa2"></select>
+            </div>
+            <div class="field">
+              <label for="field-status2">Status da etapa adicional</label>
+              <select id="field-status2" name="status2">
+                <option>Em andamento</option>
+                <option>Não iniciado</option>
+                <option>Concluído</option>
+                <option>Aguardando cliente</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="field-horas-etapa2">Horas destinadas à etapa adicional</label>
+              <input type="number" id="field-horas-etapa2" name="horasEtapa2" min="0" step="0.5">
+            </div>
+          </div>
+        </div>
+        <div class="field span-3">
+          <label for="field-resumo">Resumo da visita (um parágrafo por linha)</label>
+          <textarea id="field-resumo" name="resumo" required></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-cancelar-form">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="btn-submit-visit">Salvar visita</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card no-print">
+    <div class="card-title">Progresso por etapa</div>
+    <div id="etapas-body"></div>
+  </div>
+
+  <div class="card no-print">
+    <div class="card-title">Linha do tempo das visitas</div>
+    <div class="timeline" id="timeline-track"></div>
+  </div>
+
+  <div class="card no-print">
+    <div class="card-title">Histórico de visitas</div>
+    <div id="archive-list"></div>
+  </div>
+
+  <div id="print-report">
+    <div class="print-header">
+      <img src="assets/logo-senai.png" class="senai" alt="SENAI">
+      <div class="print-title">
+        <h1 id="print-h1">—</h1>
+        <div class="sub" id="print-title-sub"></div>
+      </div>
+      <img src="assets/logo-bp.png" class="bmp" alt="B+P">
+    </div>
+    <div class="print-kpis" id="print-kpis"></div>
+    <div class="print-charts">
+      <div class="print-chart-box">
+        <div class="print-chart-title">Horas previstas x realizadas por fase</div>
+        <div id="print-chart-stages"></div>
+        <div class="print-legend"><span><i style="background:#d9e2ec"></i>Previsto</span><span><i style="background:#2f75b5"></i>Realizado</span></div>
+      </div>
+      <div class="print-chart-box">
+        <div class="print-chart-title">Progresso por fase</div>
+        <div id="print-chart-stage-progress"></div>
+      </div>
+    </div>
+    <div class="print-stage-section">
+      <div class="print-section-title">Resumo das fases</div>
+      <div class="print-stage-grid" id="print-stage-summary"></div>
+    </div>
+    <table class="print-table">
+      <thead><tr><th>Nº</th><th>Data</th><th>Horário</th><th>Horas</th><th>Acumulado</th><th>% do total</th><th>Alocação</th><th>Responsável</th></tr></thead>
+      <tbody id="print-table-body"></tbody>
+    </table>
+    <div id="print-visits"></div>
+    <div class="print-footer">Relatório emitido automaticamente a partir do painel de acompanhamento da assessoria.</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script type="module">
+import { sb } from './js/supabase-client.js';
+import { requireSession, logout } from './js/session.js';
+import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION } from './js/stage-template.js';
+
+document.getElementById('btn-logout').addEventListener('click', logout);
+
+const params = new URLSearchParams(window.location.search);
+const assessoriaId = params.get('id');
+if (!assessoriaId) {
+  window.location.href = 'painel.html';
+}
+
+let session = null;
+let assessoriaRow = null;
+let isOwner = false;
+let state = null;
+let editingId = null;
+const expandedStages = new Set();
+const editingDeliverables = new Set();
+
+function setSaveStatus(text){
+  document.getElementById('save-status').textContent = text;
+}
+
+let saveDebounceTimer = null;
+function saveState(){
+  if (!isOwner) return;
+  clearTimeout(saveDebounceTimer);
+  setSaveStatus('Salvando…');
+  saveDebounceTimer = setTimeout(async () => {
+    const { error } = await sb.from('assessorias').update({ data: state }).eq('id', assessoriaId);
+    setSaveStatus(error ? 'Erro ao salvar — verifique sua conexão' : 'Salvo');
+  }, 500);
+}
+
+function exportBackup(){
+  const payload = {
+    app: 'Painel de Assessorias — ' + (assessoriaRow ? assessoriaRow.nome : ''),
+    backupVersion: 1,
+    exportedAt: new Date().toISOString(),
+    state
+  };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Backup_${(assessoriaRow && assessoriaRow.nome || 'assessoria').replace(/[^a-z0-9]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function importBackup(file){
+  if (!file || !isOwner) return;
+  try{
+    const content = await file.text();
+    const parsed = JSON.parse(content);
+    const importedState = parsed && parsed.state ? parsed.state : parsed;
+    const valid = importedState && Array.isArray(importedState.etapas) && Array.isArray(importedState.visitas)
+      && importedState.visitas.every(v => v && v.id && v.etapaSnapshots && Array.isArray(v.resumo));
+    if(!valid) throw new Error('O arquivo não possui a estrutura esperada deste painel.');
+    const exportedAt = parsed && parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('pt-BR') : 'data não informada';
+    const ok = confirm(`Importar este backup (${exportedAt})?\n\nOs dados atuais desta assessoria serão substituídos pelas ${importedState.visitas.length} visita(s) do arquivo.`);
+    if(!ok) return;
+    state = importedState;
+    ensureProjectSchema();
+    normalizeVisitas();
+    recomputeEtapas();
+    expandedStages.clear();
+    renderFormEtapaOptions();
+    document.getElementById('print-deliverables-toggle').checked = Boolean(state.printSettings && state.printSettings.includeDeliverables);
+    renderAll();
+    alert('Backup importado com sucesso.');
+  }catch(error){
+    alert(`Não foi possível importar o backup. ${error.message || 'Verifique o arquivo selecionado.'}`);
+  }finally{
+    document.getElementById('backup-file-input').value = '';
+  }
+}
+
+function makeId(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+}
+
+const STATUS_STYLE = {
+  'Em andamento': {color:'var(--amber)', bg:'var(--amberbg)', label:'EM ANDAMENTO'},
+  'Não iniciado': {color:'var(--muted)', bg:'#eef1f5', label:'NÃO INICIADO'},
+  'Concluído': {color:'var(--green)', bg:'var(--greenbg)', label:'CONCLUÍDO'},
+  'Aguardando cliente': {color:'var(--purple)', bg:'var(--purplebg)', label:'AGUARDANDO CLIENTE'}
+};
+
+function badgeHtml(status){
+  const s = STATUS_STYLE[status] || STATUS_STYLE['Não iniciado'];
+  return `<span class="badge" style="color:${s.color};background:${s.bg}">${s.label}</span>`;
+}
+function fmtPct(x){ return (x*100).toFixed(1).replace('.', ','); }
+function fmtDateBR(iso){
+  if(!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = String(str == null ? '' : str);
+  return div.innerHTML;
+}
+function escapeAttr(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function etapaObj(id){ return state.etapas.find(e => e.id === id); }
+function etapaLabel(id){
+  const e = etapaObj(id);
+  return e ? e.curto : id;
+}
+function etapaIdsOf(v){
+  const snaps = v.etapaSnapshots || {};
+  const ids = Object.keys(snaps);
+  if(v.primaryEtapaId && ids.includes(v.primaryEtapaId)){
+    return [v.primaryEtapaId, ...ids.filter(id => id !== v.primaryEtapaId)];
+  }
+  return ids;
+}
+function tagRowHtml(ids){
+  return `<div class="tag-row">${ids.map(id => `<span class="tag">${etapaLabel(id)}</span>`).join('')}</div>`;
+}
+function etapaAllocationJoined(v){
+  const snapshots = v.etapaSnapshots || {};
+  return etapaIdsOf(v).map(id => `${etapaLabel(id)}: ${Number(snapshots[id] && snapshots[id].horas || 0)}h`).join(' + ');
+}
+
+function ensureProjectSchema(){
+  const previousStages = Array.isArray(state.etapas) ? state.etapas : [];
+  const previousVersion = Number(state.schemaVersion || 0);
+  const isLegacyStageSchema = previousVersion < 3;
+  state.etapas = STAGE_DEFINITIONS.map(def => {
+    const old = previousStages.find(e => e.id === def.id) || {};
+    const hasSavedDeliverables = previousVersion >= 3 && Array.isArray(old.entregaveis);
+    const oldDeliverables = Array.isArray(old.entregaveis) ? old.entregaveis : [];
+    const entregaveis = hasSavedDeliverables
+      ? oldDeliverables.map(saved => ({...saved, locked:false, required:saved.required !== false, done:Boolean(saved.done)}))
+      : def.entregaveis.map(base => ({...base, locked:false, done:false}));
+    if(previousVersion >= 3 && def.id === 'T2'){
+      oldDeliverables.filter(d => d.tool && !d.locked && !entregaveis.some(x => x.id === d.id)).forEach(d => entregaveis.push({...d}));
+    }
+    return {
+      ...old,
+      id:def.id,
+      curto:def.curto,
+      nome:def.nome,
+      prev:isLegacyStageSchema ? def.prev : (Number(old.prev) > 0 ? Number(old.prev) : def.prev),
+      real:Number(old.real) || 0,
+      status:old.status || 'Não iniciado',
+      entregaveis
+    };
+  });
+  if(!Array.isArray(state.visitas)) state.visitas = [];
+  state.schemaVersion = PROJECT_SCHEMA_VERSION;
+  state.totalPrevisto = state.etapas.reduce((sum,e) => sum + Number(e.prev || 0), 0);
+  state.printSettings = {...(state.printSettings || {}), includeDeliverables:Boolean(state.printSettings && state.printSettings.includeDeliverables)};
+}
+
+function etapaAllocatedTotal(){ return state.etapas.reduce((s,e) => s + Number(e.real||0), 0); }
+function normalizeVisitas(){
+  state.visitas.sort((a,b) => a.dataISO.localeCompare(b.dataISO) || String(a.id).localeCompare(String(b.id)));
+  state.visitas.forEach((v,i) => { v.n = i+1; });
+}
+function recomputeEtapas(){
+  state.etapas.forEach(e => { e.real = 0; e.status = 'Não iniciado'; });
+  state.visitas.forEach(v => {
+    const snaps = v.etapaSnapshots || {};
+    Object.keys(snaps).forEach(id => {
+      const e = etapaObj(id);
+      if(e){
+        e.real += Number(snaps[id].horas || 0);
+        e.real = Math.round(e.real*100)/100;
+        e.status = snaps[id].status;
+      }
+    });
+  });
+}
+function computeTotals(){
+  const totalReal = etapaAllocatedTotal();
+  const totalSaldo = state.totalPrevisto - totalReal;
+  const totalPct = state.totalPrevisto > 0 ? totalReal / state.totalPrevisto : 0;
+  return {totalReal, totalSaldo, totalPct};
+}
+function lastVisit(){ return state.visitas.length ? state.visitas[state.visitas.length-1] : null; }
+function currentEtapaId(){
+  const lv = lastVisit();
+  if(lv && lv.primaryEtapaId) return lv.primaryEtapaId;
+  const firstOpen = state.etapas.find(e => e.status !== 'Concluído');
+  return firstOpen ? firstOpen.id : state.etapas[0].id;
+}
+function nextOpenEtapa(){
+  const curId = currentEtapaId();
+  const idx = state.etapas.findIndex(e => e.id === curId);
+  for(let i = idx+1; i < state.etapas.length; i++){
+    if(state.etapas[i].status !== 'Concluído') return state.etapas[i];
+  }
+  return state.etapas.find(e => e.status !== 'Concluído' && e.id !== curId) || null;
+}
+
+function renderKPIs(){
+  const {totalReal, totalSaldo, totalPct} = computeTotals();
+  const R = 68, CIRC = 2*Math.PI*R;
+  const gauge = document.getElementById('gauge-fill');
+  gauge.setAttribute('stroke-dasharray', CIRC.toFixed(2));
+  gauge.setAttribute('stroke-dashoffset', (CIRC*(1-Math.max(0,Math.min(1,totalPct)))).toFixed(2));
+  document.getElementById('kpi-progress-value').textContent = fmtPct(totalPct) + '%';
+  document.getElementById('kpi-horas-real').textContent = totalReal;
+  document.getElementById('kpi-horas-note').textContent = `de ${state.totalPrevisto}h · saldo ${totalSaldo}h`;
+
+  const curId = currentEtapaId();
+  const curEtapa = etapaObj(curId);
+  document.getElementById('kpi-etapa-atual').textContent = curEtapa ? curEtapa.curto : curId;
+  document.getElementById('kpi-etapa-nome').textContent = curEtapa ? curEtapa.nome.split('— ')[1] : '';
+
+  const lv = lastVisit();
+  const statusAtual = lv ? lv.status || (curEtapa && curEtapa.status) : (curEtapa ? curEtapa.status : 'Não iniciado');
+  document.getElementById('kpi-status-badge').innerHTML = badgeHtml(statusAtual);
+  document.getElementById('kpi-status-note').textContent = lv ? `última visita em ${fmtDateBR(lv.dataISO)}` : 'nenhuma visita registrada';
+}
+
+function getDeliverableStats(e){
+  const items = Array.isArray(e.entregaveis) ? e.entregaveis : [];
+  const done = items.filter(d => d.done).length;
+  return {items, done, total:items.length, pct:items.length ? done/items.length : 0};
+}
+
+function renderDeliverableItem(stageId, d){
+  const itemPrefix = d.item ? `<strong>${escapeHtml(d.item)}</strong> — ` : '';
+  const note = d.note ? `<div class="stage-note">${escapeHtml(d.note)}</div>` : '';
+  const editing = editingDeliverables.has(d.id);
+  const content = (editing && isOwner)
+    ? `<div class="deliverable-editor">
+        <input type="text" aria-label="Número ou item do entregável" value="${escapeAttr(d.item)}" placeholder="Item, ex.: 3.8.1" oninput="updateDeliverable('${stageId}','${d.id}','item',this.value)">
+        <input type="text" aria-label="Nome do entregável" value="${escapeAttr(d.label)}" placeholder="Nome do entregável ou ferramenta" data-deliverable-focus="${d.id}" oninput="updateDeliverable('${stageId}','${d.id}','label',this.value)">
+        <input type="text" class="editor-note" aria-label="Observação do entregável" value="${escapeAttr(d.note || '')}" placeholder="Observação opcional" oninput="updateDeliverable('${stageId}','${d.id}','note',this.value)">
+        <label class="editor-required"><input type="checkbox" ${d.required ? 'checked' : ''} onchange="updateDeliverable('${stageId}','${d.id}','required',this.checked)"> Entregável obrigatório</label>
+      </div>`
+    : `<div class="deliverable-text">${itemPrefix}${escapeHtml(d.label || 'Entregável sem nome')}${note}</div>`;
+  const actions = !isOwner
+    ? `<span class="${d.required ? 'required-pill' : 'optional-pill'}">${d.required ? 'Obrigatório' : 'Opcional'}</span>`
+    : (editing
+      ? `<button type="button" class="stage-action" onclick="toggleDeliverableEdit('${stageId}','${d.id}')">Concluir edição</button>`
+      : `<span class="${d.required ? 'required-pill' : 'optional-pill'}">${d.required ? 'Obrigatório' : 'Opcional'}</span>
+         <button type="button" class="item-action" onclick="toggleDeliverableEdit('${stageId}','${d.id}')">Editar</button>
+         <button type="button" class="item-action item-action-danger" onclick="removeDeliverable('${stageId}','${d.id}')">Remover</button>`);
+  return `<div class="deliverable-item${d.done ? ' done' : ''}">
+      <input type="checkbox" ${d.done ? 'checked' : ''} ${isOwner ? '' : 'disabled'} aria-label="Marcar ${escapeAttr(d.label || d.item)} como concluído" onchange="toggleDeliverable('${stageId}','${d.id}',this.checked)">
+      ${content}
+      <div class="deliverable-actions">${actions}</div>
+    </div>`;
+}
+
+function renderEtapas(){
+  const body = document.getElementById('etapas-body');
+  body.innerHTML = state.etapas.map(e => {
+    const hoursPct = e.prev > 0 ? e.real/e.prev : 0;
+    const hoursWidth = Math.max(0,Math.min(100,hoursPct*100));
+    const saldo = e.prev - e.real;
+    const stats = getDeliverableStats(e);
+    const deliverableWidth = Math.max(0,Math.min(100,stats.pct*100));
+    const expanded = expandedStages.has(e.id);
+    const toolCount = stats.items.filter(d => d.tool).length;
+    return `<div class="stage-row">
+        <div class="stage-id">${escapeHtml(e.curto.replace('Fase ', 'F'))}</div>
+        <div class="stage-main">
+          <div class="stage-head">
+            <span class="stage-name">${escapeHtml(e.nome)}</span>
+            ${badgeHtml(e.status)}
+          </div>
+          <div class="stage-summary">
+            <div class="progress-box">
+              <div class="progress-label"><span>Progresso por horas</span><strong>${fmtPct(hoursPct)}%</strong></div>
+              <div class="stage-bar-track"><div class="stage-bar-fill" style="width:${hoursWidth.toFixed(2)}%"></div></div>
+              <div class="stage-meta">
+                <span><strong>${e.real}h</strong> de ${e.prev}h</span>
+                <span>saldo ${saldo}h</span>
+              </div>
+            </div>
+            <div class="progress-box">
+              <div class="progress-label"><span>Entregáveis cumpridos</span><strong>${stats.done} de ${stats.total} · ${fmtPct(stats.pct)}%</strong></div>
+              <div class="stage-bar-track"><div class="stage-bar-fill deliverable-bar-fill" style="width:${deliverableWidth.toFixed(2)}%"></div></div>
+              <div class="stage-meta"><span>${stats.total-stats.done} pendente(s)</span></div>
+            </div>
+          </div>
+          <div class="stage-actions">
+            <button type="button" class="stage-action" aria-expanded="${expanded}" onclick="toggleStageDetails('${e.id}')"><span class="chevron">›</span>${expanded ? 'Recolher entregáveis' : 'Ver entregáveis'}</button>
+            ${isOwner ? `<button type="button" class="stage-action" onclick="adjustStageHours('${e.id}')">⚙ Ajustar carga horária</button>` : ''}
+          </div>
+          <div class="deliverables-panel${expanded ? '' : ' hidden'}">
+            <div class="deliverables-head">
+              <strong>Entregáveis da ${escapeHtml(e.curto)}</strong>
+              ${(isOwner && e.id === 'T2') ? `<button type="button" class="stage-action" onclick="addTool('${e.id}')" ${toolCount >= 10 ? 'disabled title="Limite de 10 ferramentas atingido"' : ''}>+ Adicionar ferramenta</button>` : ''}
+            </div>
+            <div class="deliverable-list">${stats.items.map(d => renderDeliverableItem(e.id,d)).join('')}</div>
+            ${e.id === 'T2' ? '<div class="stage-note">Os itens 3.8.1 (MFV) e 3.8.2 (GD) iniciam como obrigatórios, mas podem ser editados, alterados para opcionais ou removidos. É possível incluir ferramentas adicionais até o item 3.8.10.</div>' : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.toggleStageDetails = function(stageId){
+  if(expandedStages.has(stageId)) expandedStages.delete(stageId); else expandedStages.add(stageId);
+  renderEtapas();
+};
+
+window.toggleDeliverable = function(stageId, deliverableId, checked){
+  if(!isOwner) return;
+  const stage = etapaObj(stageId);
+  const item = stage && stage.entregaveis.find(d => d.id === deliverableId);
+  if(!item) return;
+  item.done = Boolean(checked);
+  renderEtapas();
+  saveState();
+};
+
+window.adjustStageHours = function(stageId){
+  if(!isOwner) return;
+  const stage = etapaObj(stageId);
+  if(!stage) return;
+  const answer = prompt(`Nova carga horária prevista para ${stage.nome}:`, String(stage.prev).replace('.',','));
+  if(answer === null) return;
+  const value = Number(String(answer).trim().replace(',','.'));
+  if(!Number.isFinite(value) || value <= 0){
+    alert('Informe uma carga horária maior que zero.');
+    return;
+  }
+  stage.prev = Math.round(value*100)/100;
+  state.totalPrevisto = state.etapas.reduce((sum,e) => sum + Number(e.prev || 0), 0);
+  renderAll();
+};
+
+function nextToolItem(stage){
+  const used = new Set(stage.entregaveis.filter(d => d.tool).map(d => d.item));
+  for(let n=3;n<=10;n++) if(!used.has(`3.8.${n}`)) return `3.8.${n}`;
+  return '';
+}
+
+window.addTool = function(stageId){
+  if(!isOwner) return;
+  const stage = etapaObj(stageId);
+  if(!stage) return;
+  const item = nextToolItem(stage);
+  if(!item){ alert('Já foram cadastradas as ferramentas até o item 3.8.10.'); return; }
+  const id = makeId();
+  stage.entregaveis.push({id, item, label:'', required:true, tool:true, locked:false, done:false});
+  expandedStages.add(stageId);
+  editingDeliverables.add(id);
+  renderEtapas();
+  saveState();
+  const input = document.querySelector(`[data-deliverable-focus="${id}"]`);
+  if(input) input.focus();
+};
+
+window.toggleDeliverableEdit = function(stageId, deliverableId){
+  if(!isOwner) return;
+  if(editingDeliverables.has(deliverableId)) editingDeliverables.delete(deliverableId);
+  else editingDeliverables.add(deliverableId);
+  expandedStages.add(stageId);
+  renderEtapas();
+  saveState();
+  if(editingDeliverables.has(deliverableId)){
+    const input = document.querySelector(`[data-deliverable-focus="${deliverableId}"]`);
+    if(input) input.focus();
+  }
+};
+
+window.updateDeliverable = function(stageId, deliverableId, field, value){
+  if(!isOwner) return;
+  const stage = etapaObj(stageId);
+  const deliverable = stage && stage.entregaveis.find(d => d.id === deliverableId);
+  if(!deliverable || !['item','label','note','required'].includes(field)) return;
+  deliverable[field] = field === 'required' ? Boolean(value) : value;
+  saveState();
+};
+
+window.removeDeliverable = function(stageId, deliverableId){
+  if(!isOwner) return;
+  const stage = etapaObj(stageId);
+  const deliverable = stage && stage.entregaveis.find(d => d.id === deliverableId);
+  if(!deliverable) return;
+  const description = `${deliverable.item || ''}${deliverable.item && deliverable.label ? ' — ' : ''}${deliverable.label || 'entregável sem nome'}`;
+  if(!confirm(`Remover ${description}?\n\nO item deixará de contar no indicador de entregáveis desta fase.`)) return;
+  stage.entregaveis = stage.entregaveis.filter(d => d.id !== deliverableId);
+  editingDeliverables.delete(deliverableId);
+  renderEtapas();
+  saveState();
+};
+
+function renderTimeline(){
+  const track = document.getElementById('timeline-track');
+  let running = 0;
+  const nodes = state.visitas.map(v => {
+    running += Number(v.horasNoDia);
+    const pct = state.totalPrevisto > 0 ? running / state.totalPrevisto : 0;
+    return `<div class="visit-node done">
+        <div class="visit-dot"></div>
+        <div class="visit-card">
+          <div class="visit-num">VISITA ${String(v.n).padStart(2,'0')}</div>
+          <div class="visit-date">${fmtDateBR(v.dataISO)}</div>
+          <div class="visit-time">${v.inicio||'—'} – ${v.fim||'—'} · ${v.horasNoDia}h</div>
+          ${tagRowHtml(etapaIdsOf(v))}
+          <div class="visit-acc">${escapeHtml(etapaAllocationJoined(v))}</div>
+          <div class="visit-acc">acumulado: ${running}h (${fmtPct(pct)}%)</div>
+        </div>
+      </div>`;
+  }).join('');
+  const nextEtapa = nextOpenEtapa();
+  const pendingNode = `<div class="visit-node pending">
+      <div class="visit-dot"></div>
+      <div class="visit-card pending-card">
+        <div class="visit-num">PRÓXIMA VISITA</div>
+        <div class="visit-date">a agendar</div>
+        ${tagRowHtml(nextEtapa ? [nextEtapa.id] : [])}
+      </div>
+    </div>`;
+  track.innerHTML = nodes + pendingNode;
+}
+
+function renderArchive(){
+  const list = document.getElementById('archive-list');
+  let running = 0;
+  const accByN = {};
+  state.visitas.forEach(v => { running += Number(v.horasNoDia); accByN[v.n] = running; });
+  const ordered = [...state.visitas].reverse();
+  list.innerHTML = ordered.map((v, idx) => {
+    const acc = accByN[v.n];
+    const pct = state.totalPrevisto > 0 ? acc / state.totalPrevisto : 0;
+    const paras = v.resumo.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    return `<div class="archive-card${idx===0 ? ' archive-latest' : ''}">
+        <div class="archive-side">
+          <div class="archive-num">VISITA ${String(v.n).padStart(2,'0')}</div>
+          <div class="archive-date">${fmtDateBR(v.dataISO)}</div>
+          <div class="archive-hours">${v.horasNoDia}h no dia · ${acc}h acumuladas (${fmtPct(pct)}%)<br>${escapeHtml(etapaAllocationJoined(v))}</div>
+          ${tagRowHtml(etapaIdsOf(v))}
+          ${isOwner ? `<div class="archive-actions">
+            <button type="button" class="link-btn" onclick="openFormForEdit('${v.id}')">Editar</button>
+            <button type="button" class="link-btn link-btn-danger" onclick="deleteVisit('${v.id}')">Excluir</button>
+          </div>` : ''}
+        </div>
+        <div class="archive-text">${paras}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderFormEtapaOptions(){
+  const opts = state.etapas.map(e => `<option value="${e.id}">${etapaLabel(e.id)} — ${e.nome.split('— ')[1]}</option>`).join('');
+  document.getElementById('field-etapa').innerHTML = opts;
+  document.getElementById('field-etapa2').innerHTML = opts;
+}
+function resetFormChrome(){
+  editingId = null;
+  document.getElementById('form-title').textContent = 'REGISTRAR NOVA VISITA';
+  document.getElementById('btn-submit-visit').textContent = 'Salvar visita';
+}
+function prefillFormForNew(){
+  document.getElementById('visit-form').reset();
+  resetFormChrome();
+  const sel = document.getElementById('field-etapa');
+  sel.value = currentEtapaId();
+  fillFromEtapa();
+  document.getElementById('field-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('field-etapa2-toggle').checked = false;
+  document.getElementById('etapa2-fields').classList.add('hidden');
+  document.getElementById('field-horas-etapa2').value = '';
+  document.getElementById('field-horas-etapa2').required = false;
+  const nextEtapa = nextOpenEtapa();
+  if(nextEtapa){
+    document.getElementById('field-etapa2').value = nextEtapa.id;
+    fillFromEtapa2();
+  }
+  updateDailyHoursTotal();
+}
+function fillFromEtapa(){
+  const e = etapaObj(document.getElementById('field-etapa').value);
+  if(!e) return;
+  document.getElementById('field-status').value = e.status;
+  document.getElementById('field-horas-etapa').value = '';
+  updateDailyHoursTotal();
+}
+function fillFromEtapa2(){
+  const e = etapaObj(document.getElementById('field-etapa2').value);
+  if(!e) return;
+  document.getElementById('field-status2').value = e.status;
+  document.getElementById('field-horas-etapa2').value = '';
+  updateDailyHoursTotal();
+}
+function updateDailyHoursTotal(){
+  const hours1 = Number(document.getElementById('field-horas-etapa').value || 0);
+  const secondEnabled = document.getElementById('field-etapa2-toggle').checked;
+  const hours2 = secondEnabled ? Number(document.getElementById('field-horas-etapa2').value || 0) : 0;
+  const total = Math.round((Math.max(0,hours1)+Math.max(0,hours2))*100)/100;
+  document.getElementById('field-horasdia').value = total || '';
+}
+
+window.openFormForEdit = function(id){
+  if(!isOwner) return;
+  const v = state.visitas.find(x => x.id === id);
+  if(!v) return;
+  editingId = id;
+  document.getElementById('form-title').textContent = `EDITAR VISITA ${String(v.n).padStart(2,'0')}`;
+  document.getElementById('btn-submit-visit').textContent = 'Salvar alterações';
+
+  document.getElementById('field-data').value = v.dataISO;
+  document.getElementById('field-inicio').value = v.inicio || '';
+  document.getElementById('field-fim').value = v.fim || '';
+  const ids = etapaIdsOf(v);
+  const primary = ids[0];
+  document.getElementById('field-etapa').value = primary;
+  const snap1 = v.etapaSnapshots[primary];
+  document.getElementById('field-status').value = snap1.status;
+  document.getElementById('field-horas-etapa').value = Number(snap1.horas || 0);
+
+  if(ids[1]){
+    document.getElementById('field-etapa2-toggle').checked = true;
+    document.getElementById('etapa2-fields').classList.remove('hidden');
+    document.getElementById('field-horas-etapa2').required = true;
+    document.getElementById('field-etapa2').value = ids[1];
+    const snap2 = v.etapaSnapshots[ids[1]];
+    document.getElementById('field-status2').value = snap2.status;
+    document.getElementById('field-horas-etapa2').value = Number(snap2.horas || 0);
+  } else {
+    document.getElementById('field-etapa2-toggle').checked = false;
+    document.getElementById('etapa2-fields').classList.add('hidden');
+    document.getElementById('field-horas-etapa2').value = '';
+    document.getElementById('field-horas-etapa2').required = false;
+  }
+
+  updateDailyHoursTotal();
+  document.getElementById('field-resumo').value = v.resumo.join('\n');
+  document.getElementById('form-card').classList.remove('hidden');
+  document.getElementById('form-card').scrollIntoView({behavior:'smooth', block:'start'});
+};
+
+window.deleteVisit = function(id){
+  if(!isOwner) return;
+  const v = state.visitas.find(x => x.id === id);
+  if(!v) return;
+  const ok = confirm(`Excluir a Visita ${String(v.n).padStart(2,'0')} (${fmtDateBR(v.dataISO)})? Essa ação não pode ser desfeita e os totais serão recalculados.`);
+  if(!ok) return;
+  state.visitas = state.visitas.filter(x => x.id !== id);
+  if(editingId === id){
+    document.getElementById('form-card').classList.add('hidden');
+    document.getElementById('visit-form').reset();
+    resetFormChrome();
+  }
+  normalizeVisitas();
+  recomputeEtapas();
+  renderAll();
+};
+
+function renderAll(){
+  renderKPIs();
+  renderEtapas();
+  renderTimeline();
+  renderArchive();
+  saveState();
+}
+
+function buildPrintKPIs(){
+  const {totalReal, totalSaldo, totalPct} = computeTotals();
+  const curId = currentEtapaId();
+  const curEtapa = etapaObj(curId);
+  const lv = lastVisit();
+  const statusAtual = lv ? (lv.status || (curEtapa && curEtapa.status)) : (curEtapa ? curEtapa.status : 'Não iniciado');
+  const radius = 18;
+  const circumference = 2*Math.PI*radius;
+  const offset = circumference*(1-Math.max(0,Math.min(1,totalPct)));
+  return `
+    <div class="print-kpi print-kpi-progress">
+      <svg viewBox="0 0 48 48" role="img" aria-label="Progresso geral: ${fmtPct(totalPct)}%">
+        <circle cx="24" cy="24" r="${radius}" fill="none" stroke="#e5ebf3" stroke-width="6"/>
+        <circle cx="24" cy="24" r="${radius}" fill="none" stroke="#4b78b8" stroke-width="6" stroke-linecap="round"
+          stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 24 24)"/>
+      </svg>
+      <div><small>PROGRESSO GERAL</small><strong>${fmtPct(totalPct)}%</strong></div>
+    </div>
+    <div class="print-kpi"><small>HORAS REALIZADAS</small><strong>${totalReal}h</strong><span>de ${state.totalPrevisto}h · saldo ${totalSaldo}h</span></div>
+    <div class="print-kpi"><small>ETAPA ATUAL</small><strong>${curEtapa ? curEtapa.curto : curId}</strong><span>${curEtapa ? curEtapa.nome.split('— ')[1] : ''}</span></div>
+    <div class="print-kpi"><small>STATUS</small><strong style="font-size:13px">${statusAtual}</strong></div>
+  `;
+}
+
+function buildStageBarChartSVG(){
+  const w = 420, h = 210, padL = 34, padB = 26, padT = 14, padR = 8;
+  const chartW = w - padL - padR, chartH = h - padT - padB;
+  const rawMax = Math.max(...state.etapas.map(e => e.prev), 1);
+  const maxVal = rawMax * 1.15;
+  const n = state.etapas.length;
+  const groupW = chartW / n;
+  const barW = groupW * 0.30;
+  const gap = groupW * 0.08;
+  let grid = '', bars = '', labels = '';
+  const steps = 4;
+  for(let i = 0; i <= steps; i++){
+    const val = (maxVal/steps)*i;
+    const y = padT + chartH - (val/maxVal)*chartH;
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL+chartW}" y2="${y.toFixed(1)}" stroke="#e5ebf3" stroke-width="1"/>`;
+    grid += `<text x="${padL-6}" y="${(y+3).toFixed(1)}" font-size="8" fill="#64748b" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  state.etapas.forEach((e,i) => {
+    const groupX = padL + i*groupW;
+    const prevH = (e.prev/maxVal)*chartH;
+    const realH = (e.real/maxVal)*chartH;
+    const xPrev = groupX + gap;
+    const xReal = xPrev + barW + gap*0.6;
+    bars += `<rect x="${xPrev.toFixed(1)}" y="${(padT+chartH-prevH).toFixed(1)}" width="${barW.toFixed(1)}" height="${prevH.toFixed(1)}" fill="#d9e2ec"/>`;
+    bars += `<rect x="${xReal.toFixed(1)}" y="${(padT+chartH-realH).toFixed(1)}" width="${barW.toFixed(1)}" height="${realH.toFixed(1)}" fill="#2f75b5"/>`;
+    labels += `<text x="${(groupX+groupW/2).toFixed(1)}" y="${padT+chartH+15}" font-size="9" fill="#17365d" text-anchor="middle" font-weight="700">${escapeHtml(e.curto.replace('Fase ', 'F'))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+      ${grid}
+      <line x1="${padL}" y1="${padT+chartH}" x2="${padL+chartW}" y2="${padT+chartH}" stroke="#17365d" stroke-width="1.2"/>
+      ${bars}${labels}
+    </svg>`;
+}
+
+function buildStageProgressGauges(){
+  const radius = 26;
+  const circumference = 2*Math.PI*radius;
+  return `<div class="print-stage-gauges">${state.etapas.map(e => {
+    const pct = e.prev > 0 ? e.real/e.prev : 0;
+    const clamped = Math.max(0,Math.min(1,pct));
+    const offset = circumference*(1-clamped);
+    return `<div class="print-stage-gauge">
+        <svg viewBox="0 0 64 64" role="img" aria-label="${escapeAttr(e.curto)}: ${fmtPct(pct)}%">
+          <circle cx="32" cy="32" r="${radius}" fill="none" stroke="#e5ebf3" stroke-width="7"/>
+          <circle cx="32" cy="32" r="${radius}" fill="none" stroke="#4b78b8" stroke-width="7" stroke-linecap="round"
+            stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 32 32)"/>
+        </svg>
+        <div>
+          <div class="print-stage-gauge-label">${escapeHtml(e.curto)}</div>
+          <div class="print-stage-gauge-value">${fmtPct(pct)}%</div>
+          <div class="print-stage-gauge-hours">${e.real}h de ${e.prev}h</div>
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function renderPrint(){
+  document.getElementById('print-h1').textContent = assessoriaRow.nome;
+  document.getElementById('print-title-sub').textContent =
+    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
+  document.getElementById('print-kpis').innerHTML = buildPrintKPIs();
+  document.getElementById('print-chart-stages').innerHTML = buildStageBarChartSVG();
+  document.getElementById('print-chart-stage-progress').innerHTML = buildStageProgressGauges();
+  const includeDeliverables = Boolean(state.printSettings && state.printSettings.includeDeliverables);
+  document.getElementById('print-stage-summary').innerHTML = state.etapas.map(e => {
+    const hoursPct = e.prev > 0 ? e.real/e.prev : 0;
+    const stats = getDeliverableStats(e);
+    const details = includeDeliverables ? `<ul class="print-deliverables">${stats.items.map(d => {
+      const label = `${d.item ? d.item+' — ' : ''}${d.label || 'Ferramenta ainda não nomeada'}`;
+      return `<li class="${d.done ? 'done' : 'pending'}">${d.done ? 'Concluído' : 'Pendente'} · ${d.required ? 'Obrigatório' : 'Opcional'} · ${escapeHtml(label)}</li>`;
+    }).join('')}</ul>` : '';
+    return `<div class="print-stage-card">
+        <h3>${escapeHtml(e.nome)}</h3>
+        <div class="print-stage-metrics">Horas: ${e.real}h de ${e.prev}h (${fmtPct(hoursPct)}%) · Entregáveis: ${stats.done} de ${stats.total} (${fmtPct(stats.pct)}%)</div>
+        ${details}
+      </div>`;
+  }).join('');
+  let running = 0;
+  const tbody = document.getElementById('print-table-body');
+  tbody.innerHTML = state.visitas.map(v => {
+    running += Number(v.horasNoDia);
+    const pct = state.totalPrevisto > 0 ? running / state.totalPrevisto : 0;
+    return `<tr><td>${String(v.n).padStart(2,'0')}</td><td>${fmtDateBR(v.dataISO)}</td>
+        <td>${v.inicio||'—'}–${v.fim||'—'}</td><td>${v.horasNoDia}h</td><td>${running}h</td>
+        <td>${fmtPct(pct)}%</td><td>${escapeHtml(etapaAllocationJoined(v))}</td><td>SENAI</td></tr>`;
+  }).join('');
+  running = 0;
+  const blocks = document.getElementById('print-visits');
+  blocks.innerHTML = state.visitas.map(v => {
+    running += Number(v.horasNoDia);
+    const paras = v.resumo.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    return `<div class="print-visit">
+        <h3>VISITA ${String(v.n).padStart(2,'0')} — ${fmtDateBR(v.dataISO)}</h3>
+        <div class="print-visit-meta">${v.inicio||'—'}–${v.fim||'—'} · ${v.horasNoDia}h no dia · acumulado ${running}h de ${state.totalPrevisto}h · ${escapeHtml(etapaAllocationJoined(v))}</div>
+        ${paras}
+      </div>`;
+  }).join('');
+}
+
+function applyHeaderInfo(){
+  document.getElementById('header-title').textContent = assessoriaRow.nome;
+  document.getElementById('header-sub').textContent =
+    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
+  document.getElementById('session-email').textContent = session.user.email;
+  const roleBadge = document.getElementById('role-badge');
+  roleBadge.textContent = isOwner ? 'Consultor' : 'Cliente (somente leitura)';
+  roleBadge.className = 'role-badge ' + (isOwner ? 'owner' : 'client');
+  roleBadge.classList.remove('hidden');
+  if(assessoriaRow.logo_url){
+    document.getElementById('logo-cliente-img').src = assessoriaRow.logo_url;
+    document.getElementById('logo-cliente-box').classList.remove('hidden');
+  }
+}
+
+function applyRoleUI(){
+  document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
+  document.getElementById('btn-importar').classList.toggle('hidden', !isOwner);
+}
+
+document.getElementById('btn-toggle-form').addEventListener('click', () => {
+  if(!isOwner) return;
+  const card = document.getElementById('form-card');
+  const isHidden = card.classList.contains('hidden');
+  if(isHidden || editingId){
+    prefillFormForNew();
+    card.classList.remove('hidden');
+    card.scrollIntoView({behavior:'smooth', block:'start'});
+  } else {
+    card.classList.add('hidden');
+  }
+});
+document.getElementById('btn-cancelar-form').addEventListener('click', () => {
+  document.getElementById('form-card').classList.add('hidden');
+  document.getElementById('visit-form').reset();
+  document.getElementById('etapa2-fields').classList.add('hidden');
+  document.getElementById('field-horas-etapa2').required = false;
+  resetFormChrome();
+});
+document.getElementById('field-etapa').addEventListener('change', fillFromEtapa);
+document.getElementById('field-etapa2').addEventListener('change', fillFromEtapa2);
+document.getElementById('field-horas-etapa').addEventListener('input', updateDailyHoursTotal);
+document.getElementById('field-horas-etapa2').addEventListener('input', updateDailyHoursTotal);
+document.getElementById('field-etapa2-toggle').addEventListener('change', function(){
+  document.getElementById('etapa2-fields').classList.toggle('hidden', !this.checked);
+  document.getElementById('field-horas-etapa2').required = this.checked;
+  updateDailyHoursTotal();
+});
+document.getElementById('btn-exportar').addEventListener('click', exportBackup);
+document.getElementById('btn-importar').addEventListener('click', () => document.getElementById('backup-file-input').click());
+document.getElementById('backup-file-input').addEventListener('change', function(){
+  importBackup(this.files && this.files[0]);
+});
+document.getElementById('print-deliverables-toggle').addEventListener('change', function(){
+  state.printSettings.includeDeliverables = this.checked;
+  saveState();
+});
+document.getElementById('btn-emitir').addEventListener('click', () => {
+  state.printSettings.includeDeliverables = document.getElementById('print-deliverables-toggle').checked;
+  renderPrint();
+  window.print();
+});
+document.getElementById('visit-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  if(!isOwner) return;
+  const fd = new FormData(ev.target);
+  const etapaId = fd.get('etapa');
+  const status1 = fd.get('status');
+  const hours1 = Number(fd.get('horasEtapa'));
+
+  const etapa2Enabled = document.getElementById('field-etapa2-toggle').checked;
+  const etapaId2 = etapa2Enabled ? fd.get('etapa2') : null;
+  if(etapa2Enabled && etapaId2 === etapaId){
+    alert('A etapa adicional precisa ser diferente da etapa em foco.');
+    return;
+  }
+  const hours2 = etapa2Enabled ? Number(fd.get('horasEtapa2')) : 0;
+  if(!Number.isFinite(hours1) || hours1 <= 0){
+    alert('Informe quantas horas desta visita foram destinadas à fase em foco.');
+    return;
+  }
+  if(etapa2Enabled && (!Number.isFinite(hours2) || hours2 <= 0)){
+    alert('Informe quantas horas desta visita foram destinadas à fase adicional.');
+    return;
+  }
+  const totalHours = Math.round((hours1+hours2)*100)/100;
+
+  const snaps = {};
+  snaps[etapaId] = {horas:Math.round(hours1*100)/100, status:status1};
+  if(etapa2Enabled && etapaId2){
+    snaps[etapaId2] = {horas:Math.round(hours2*100)/100, status:fd.get('status2')};
+  }
+
+  const resumoTexto = fd.get('resumo').trim();
+  const resumoArr = resumoTexto.split(/\n+/).map(s => s.trim()).filter(Boolean);
+
+  if(editingId){
+    const v = state.visitas.find(x => x.id === editingId);
+    if(v){
+      v.dataISO = fd.get('data');
+      v.inicio = fd.get('inicio') || '';
+      v.fim = fd.get('fim') || '';
+      v.horasNoDia = totalHours;
+      v.primaryEtapaId = etapaId;
+      v.etapaSnapshots = snaps;
+      v.status = status1;
+      v.resumo = resumoArr;
+    }
+  } else {
+    state.visitas.push({
+      id: makeId(),
+      n: 0,
+      dataISO: fd.get('data'),
+      inicio: fd.get('inicio') || '',
+      fim: fd.get('fim') || '',
+      horasNoDia: totalHours,
+      primaryEtapaId: etapaId,
+      etapaSnapshots: snaps,
+      status: status1,
+      resumo: resumoArr
+    });
+  }
+
+  normalizeVisitas();
+  recomputeEtapas();
+  renderAll();
+  ev.target.reset();
+  document.getElementById('etapa2-fields').classList.add('hidden');
+  document.getElementById('field-horas-etapa2').required = false;
+  document.getElementById('form-card').classList.add('hidden');
+  resetFormChrome();
+});
+
+async function boot(){
+  session = await requireSession();
+  if(!session) return;
+
+  const { data, error } = await sb.from('assessorias').select('*').eq('id', assessoriaId).single();
+  if(error || !data){
+    alert('Esta assessoria não existe ou você não tem acesso a ela.');
+    window.location.href = 'painel.html';
+    return;
+  }
+  assessoriaRow = data;
+  isOwner = session.user.id === data.owner_id;
+  state = data.data || {};
+
+  ensureProjectSchema();
+  applyHeaderInfo();
+  applyRoleUI();
+  document.getElementById('print-deliverables-toggle').checked = Boolean(state.printSettings && state.printSettings.includeDeliverables);
+
+  renderFormEtapaOptions();
+  normalizeVisitas();
+  recomputeEtapas();
+  renderKPIs();
+  renderEtapas();
+  renderTimeline();
+  renderArchive();
+  setSaveStatus(isOwner ? 'Sincronizado' : '');
+}
+
+boot();
+</script>
+</body>
+</html>

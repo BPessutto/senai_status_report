@@ -1,0 +1,119 @@
+{
+  "app": "Painel de Assessorias — Projeto B+P — VR Painéis",
+  "backupVersion": 1,
+  "exportedAt": "2026-09-03T00:24:32.900951Z",
+  "state": {
+    "schemaVersion": 5,
+    "totalPrevisto": 116,
+    "etapas": [
+      {
+        "id": "T1",
+        "curto": "Fase 01",
+        "nome": "Fase 01 — Diagnóstico",
+        "prev": 20,
+        "real": 0,
+        "status": "Não iniciado"
+      },
+      {
+        "id": "T2",
+        "curto": "Fase 02",
+        "nome": "Fase 02 — Implementação",
+        "prev": 70,
+        "real": 0,
+        "status": "Não iniciado"
+      },
+      {
+        "id": "T3",
+        "curto": "Fase 03",
+        "nome": "Fase 03 — Resultados",
+        "prev": 18,
+        "real": 0,
+        "status": "Não iniciado"
+      },
+      {
+        "id": "T4",
+        "curto": "Fase 04",
+        "nome": "Fase 04 — Encerramento",
+        "prev": 8,
+        "real": 0,
+        "status": "Não iniciado"
+      }
+    ],
+    "visitas": [
+      {
+        "id": "seed-1",
+        "n": 1,
+        "dataISO": "2026-07-29",
+        "inicio": "08:00",
+        "fim": "17:00",
+        "horasNoDia": 8,
+        "primaryEtapaId": "T1",
+        "status": "Em andamento",
+        "etapaSnapshots": {
+          "T1": {
+            "horas": 4,
+            "status": "Em andamento"
+          },
+          "T2": {
+            "horas": 4,
+            "status": "Não iniciado"
+          }
+        },
+        "resumo": [
+          "Visita realizada em 29/07: mapeamento dos processos dos setores de corte e dobra, almoxarifado, recebimento de chapas e sistema de ponto de pedido. No período da tarde, foram desenvolvidas propostas de ganhos rápidos, com posterior encaminhamento das soluções para fabricação."
+        ]
+      },
+      {
+        "id": "seed-2",
+        "n": 2,
+        "dataISO": "2026-08-05",
+        "inicio": "08:00",
+        "fim": "17:00",
+        "horasNoDia": 8,
+        "primaryEtapaId": "T1",
+        "status": "Em andamento",
+        "etapaSnapshots": {
+          "T1": {
+            "horas": 6,
+            "status": "Em andamento"
+          },
+          "T2": {
+            "horas": 2,
+            "status": "Não iniciado"
+          }
+        },
+        "resumo": [
+          "Visita realizada em 05/08: finalização do mapeamento dos processos de corte e dobra, montagem de skids pelo facilitador industrial, segregação, soldagem, pintura, montagem mecânica e montagem elétrica, incluindo o esquema de movimentação interna dos materiais. Também foi concluído o mapeamento da montagem mecânica e encaminhada a proposta de ganho rápido relacionada à gestão visual, com foco na redução de não conformidades entre a montagem mecânica e a montagem elétrica. Adicionalmente, foi estruturado o OneNote da assessoria, contemplando a organização do fluxo de amarração das ordens de produção e o registro do sistema APS utilizado pela empresa, ambos considerados sistemas legados."
+        ]
+      },
+      {
+        "id": "seed-3",
+        "n": 3,
+        "dataISO": "2026-08-11",
+        "inicio": "08:00",
+        "fim": "17:00",
+        "horasNoDia": 8,
+        "primaryEtapaId": "T1",
+        "status": "Em andamento",
+        "etapaSnapshots": {
+          "T1": {
+            "horas": 4,
+            "status": "Em andamento"
+          },
+          "T2": {
+            "horas": 4,
+            "status": "Não iniciado"
+          }
+        },
+        "resumo": [
+          "Reunião gerencial realizada com a equipe Kaizen do projeto e a diretoria; definição de estudo de métodos e processos em componentes do posto 4; coleta de dados e cronoanálise para determinação do tempo padrão e parâmetros de cálculo.",
+          "Visita do instrutor educacional para definição de parâmetros de soldagem a laser e definição dos componentes a serem estudados durante o processo de mockup da célula piloto. Reunião sobre a nova linha de manufatura de inox.",
+          "No período da tarde, realizou-se a tratativa documental sobre a documentação gerada no período da manhã e a criação da planilha padrão para início da análise de método."
+        ]
+      }
+    ],
+    "printSettings": {
+      "includeDeliverables": false
+    }
+  }
+}

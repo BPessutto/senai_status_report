@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minhas Assessorias</title>
+<link rel="stylesheet" href="js/shared.css">
+<style>
+  .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px}
+  .assessoria-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+  .assessoria-card h3{margin:0;font-size:15px;color:var(--navy)}
+  .assessoria-card .cliente{font-size:12px;color:var(--muted)}
+  .bar-track{height:9px;background:#eef1f5;border-radius:var(--radius-pill);overflow:hidden}
+  .bar-fill{height:100%;background:var(--blue);border-radius:var(--radius-pill)}
+  .pct-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .btn-sm{padding:7px 10px;font-size:11.5px}
+  .client-panel{border-top:1px dashed var(--border);padding-top:10px;margin-top:2px;display:none}
+  .client-panel.open{display:block}
+  .client-email-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #f1f4f8}
+  .client-email-row:last-child{border-bottom:0}
+  .link-btn{border:0;background:none;color:var(--danger);font-size:11px;font-weight:700;cursor:pointer}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal-box{background:#fff;border-radius:var(--radius);padding:20px;max-width:420px;width:100%}
+  .modal-box h2{margin:0 0 14px;font-size:15px;color:var(--navy)}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+  .role-tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <div class="logo-group">
+        <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
+        <div class="logo-box logo-bp"><img src="assets/logo-bp.png" alt="B+P"></div>
+      </div>
+      <div class="title-block">
+        <div class="eyebrow">ACOMPANHAMENTO DE CONSULTORIAS</div>
+        <h1 id="page-title">Minhas Assessorias</h1>
+        <div class="sub" id="user-email"></div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
+      <button class="btn btn-ghost" id="btn-logout">Sair</button>
+    </div>
+  </header>
+
+  <div id="grid" class="grid"></div>
+  <div id="empty-state" class="empty-state hidden"></div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-nova">
+  <div class="modal-box">
+    <h2>Nova assessoria</h2>
+    <form id="form-nova">
+      <div class="field">
+        <label for="nova-nome">Nome do projeto</label>
+        <input type="text" id="nova-nome" required placeholder="Ex.: Projeto Lean — Empresa XPTO">
+      </div>
+      <div class="field">
+        <label for="nova-cliente">Nome do cliente / empresa</label>
+        <input type="text" id="nova-cliente" placeholder="Ex.: XPTO Indústria Ltda.">
+      </div>
+      <div class="field">
+        <label for="nova-proposta">Nº da proposta (opcional)</label>
+        <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Criar assessoria</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script type="module">
+  import { sb } from './js/supabase-client.js';
+  import { requireSession, logout } from './js/session.js';
+  import { defaultState } from './js/stage-template.js';
+
+  const grid = document.getElementById('grid');
+  const emptyState = document.getElementById('empty-state');
+  const btnNova = document.getElementById('btn-nova');
+
+  document.getElementById('btn-logout').addEventListener('click', logout);
+
+  function fmtPct(x){ return (x*100).toFixed(1).replace('.', ','); }
+  function computeProgress(data){
+    const etapas = Array.isArray(data && data.etapas) ? data.etapas : [];
+    const totalPrevisto = Number(data && data.totalPrevisto) || 0;
+    const totalReal = etapas.reduce((s,e) => s + Number(e.real || 0), 0);
+    return totalPrevisto > 0 ? totalReal / totalPrevisto : 0;
+  }
+  function currentStatus(data){
+    const etapas = Array.isArray(data && data.etapas) ? data.etapas : [];
+    const visitas = Array.isArray(data && data.visitas) ? data.visitas : [];
+    const lv = visitas.length ? visitas[visitas.length - 1] : null;
+    if (lv && lv.status) return lv.status;
+    const firstOpen = etapas.find(e => e.status !== 'Concluído');
+    return firstOpen ? firstOpen.status : 'Não iniciado';
+  }
+
+  let session = null;
+  let isOwnerOfSomething = false;
+
+  async function loadClientEmails(assessoriaId, listEl){
+    const { data, error } = await sb.from('assessoria_clientes').select('*').eq('assessoria_id', assessoriaId).order('created_at');
+    if (error) { listEl.innerHTML = `<div class="muted">Não foi possível carregar.</div>`; return; }
+    if (!data.length) { listEl.innerHTML = `<div class="muted">Nenhum cliente com acesso ainda.</div>`; return; }
+    listEl.innerHTML = data.map(c => `
+      <div class="client-email-row">
+        <span>${c.email}</span>
+        <button type="button" class="link-btn" data-remove-client="${c.id}">remover</button>
+      </div>`).join('');
+    listEl.querySelectorAll('[data-remove-client]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await sb.from('assessoria_clientes').delete().eq('id', btn.dataset.removeClient);
+        loadClientEmails(assessoriaId, listEl);
+      });
+    });
+  }
+
+  function renderCard(row){
+    const isOwner = row.owner_id === session.user.id;
+    const pct = computeProgress(row.data);
+    const status = currentStatus(row.data);
+    const card = document.createElement('div');
+    card.className = 'assessoria-card';
+    card.innerHTML = `
+      <div>
+        <span class="role-tag">${isOwner ? 'Você é o consultor' : 'Acesso de cliente (somente leitura)'}</span>
+        <h3>${row.nome}</h3>
+        <div class="cliente">${row.cliente_nome || '—'}${row.proposta ? ' · Proposta ' + row.proposta : ''}</div>
+      </div>
+      <div>
+        <div class="pct-row"><span>Progresso</span><strong>${fmtPct(pct)}%</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(0,Math.min(100,pct*100)).toFixed(1)}%"></div></div>
+        <div class="pct-row" style="margin-top:6px"><span>Status</span><span>${status}</span></div>
+      </div>
+      <div class="card-actions">
+        <a class="btn btn-primary btn-sm" href="dashboard.html?id=${row.id}">Abrir painel</a>
+        ${isOwner ? `<button type="button" class="btn btn-sm" data-toggle-clients="${row.id}">Compartilhar com cliente</button>` : ''}
+      </div>
+      ${isOwner ? `
+      <div class="client-panel" id="clients-${row.id}">
+        <div class="field">
+          <label>E-mail do cliente autorizado</label>
+          <div style="display:flex;gap:6px">
+            <input type="email" id="input-client-${row.id}" placeholder="cliente@empresa.com" style="flex:1">
+            <button type="button" class="btn btn-sm" data-add-client="${row.id}">Convidar</button>
+          </div>
+        </div>
+        <div id="list-clients-${row.id}"></div>
+      </div>` : ''}
+    `;
+
+    if (isOwner) {
+      const toggleBtn = card.querySelector(`[data-toggle-clients="${row.id}"]`);
+      const panel = card.querySelector(`#clients-${row.id}`);
+      const listEl = card.querySelector(`#list-clients-${row.id}`);
+      toggleBtn.addEventListener('click', () => {
+        panel.classList.toggle('open');
+        if (panel.classList.contains('open')) loadClientEmails(row.id, listEl);
+      });
+      card.querySelector(`[data-add-client="${row.id}"]`).addEventListener('click', async () => {
+        const input = card.querySelector(`#input-client-${row.id}`);
+        const email = input.value.trim();
+        if (!email) return;
+        const { error } = await sb.from('assessoria_clientes').insert({ assessoria_id: row.id, email });
+        if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
+        input.value = '';
+        loadClientEmails(row.id, listEl);
+      });
+    }
+    return card;
+  }
+
+  async function loadAssessorias(){
+    const { data, error } = await sb.from('assessorias').select('*').order('created_at', { ascending: false });
+    if (error) {
+      emptyState.textContent = 'Não foi possível carregar suas assessorias: ' + error.message;
+      emptyState.classList.remove('hidden');
+      return;
+    }
+    isOwnerOfSomething = data.some(r => r.owner_id === session.user.id);
+    btnNova.classList.toggle('hidden', !isOwnerOfSomething);
+
+    // Cliente com acesso a exatamente uma assessoria: pula direto pro painel dela.
+    if (!isOwnerOfSomething && data.length === 1) {
+      window.location.href = `dashboard.html?id=${data[0].id}`;
+      return;
+    }
+
+    if (!data.length) {
+      emptyState.innerHTML = isOwnerOfSomething
+        ? 'Nenhuma assessoria cadastrada ainda.'
+        : 'Sua conta ainda não tem acesso a nenhuma assessoria. Peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
+      emptyState.classList.remove('hidden');
+      grid.innerHTML = '';
+      return;
+    }
+    emptyState.classList.add('hidden');
+    grid.innerHTML = '';
+    data.forEach(row => grid.appendChild(renderCard(row)));
+  }
+
+  document.getElementById('btn-nova').addEventListener('click', () => {
+    document.getElementById('modal-nova').classList.remove('hidden');
+  });
+  document.getElementById('btn-cancelar-nova').addEventListener('click', () => {
+    document.getElementById('modal-nova').classList.add('hidden');
+  });
+  document.getElementById('form-nova').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const nome = document.getElementById('nova-nome').value.trim();
+    const cliente_nome = document.getElementById('nova-cliente').value.trim();
+    const proposta = document.getElementById('nova-proposta').value.trim();
+    const { data, error } = await sb.from('assessorias').insert({
+      owner_id: session.user.id,
+      nome,
+      cliente_nome: cliente_nome || null,
+      proposta: proposta || null,
+      data: defaultState()
+    }).select().single();
+    if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
+    document.getElementById('modal-nova').classList.add('hidden');
+    document.getElementById('form-nova').reset();
+    window.location.href = `dashboard.html?id=${data.id}`;
+  });
+
+  (async () => {
+    session = await requireSession();
+    if (!session) return;
+    document.getElementById('user-email').textContent = session.user.email;
+    loadAssessorias();
+  })();
+</script>
+</body>
+</html>
