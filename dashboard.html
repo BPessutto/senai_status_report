@@ -919,15 +919,24 @@ function renderTimeline(){
       </div>`;
   }).join('');
   const nextEtapa = nextOpenEtapa();
+  const proxima = nextPlannedVisit();
   const pendingNode = `<div class="visit-node pending">
       <div class="visit-dot"></div>
       <div class="visit-card pending-card">
         <div class="visit-num">PRÓXIMA VISITA</div>
-        <div class="visit-date">a agendar</div>
+        <div class="visit-date">${proxima ? fmtDateBR(proxima.dataISO) : 'a agendar'}</div>
+        ${proxima ? `<div class="visit-time">${proxima.horas}h planejadas</div>` : ''}
         ${tagRowHtml(nextEtapa ? [nextEtapa.id] : [])}
       </div>
     </div>`;
   track.innerHTML = nodes + pendingNode;
+}
+
+function nextPlannedVisit(){
+  const realizadas = new Set(state.visitas.map(v => v.dataISO));
+  return state.visitasPlanejadas
+    .filter(p => !realizadas.has(p.dataISO))
+    .sort((a,b) => a.dataISO.localeCompare(b.dataISO))[0] || null;
 }
 
 function renderArchive(){
