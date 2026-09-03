@@ -115,6 +115,7 @@
   import { requireSession, logout } from './js/session.js';
   import { defaultState } from './js/stage-template.js';
   import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex } from './js/calendar-utils.js';
+  import { showActionPanel } from './js/action-panel.js';
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
@@ -360,37 +361,74 @@
     const info = consolidatedDayInfo(iso);
     if (info) {
       if (info.tipo === 'realizada') {
-        if (confirm(`"${info.assessoria.nome}" já tem uma visita registrada nesse dia (${info.horas}h).\n\nAbrir essa assessoria?`)) {
-          window.location.href = `dashboard.html?id=${info.assessoria.id}`;
-        }
+        const result = await showActionPanel({
+          title: fmtDateBR(iso),
+          subtitle: `"${info.assessoria.nome}" já tem uma visita registrada nesse dia (${info.horas}h).`,
+          actions: [
+            { label:'Abrir essa assessoria', style:'primary', value:'abrir' },
+            { label:'Fechar', style:'ghost', value:'fechar' }
+          ]
+        });
+        if (result && result.action === 'abrir') window.location.href = `dashboard.html?id=${info.assessoria.id}`;
         return;
       }
       // planejada, ainda não realizada
-      const querReagendar = confirm(`"${info.assessoria.nome}" está planejada para esse dia (${info.horas}h).\n\nOK = Reagendar para outra data\nCancelar = ver opção de remover`);
-      if (querReagendar) {
+      const result = await showActionPanel({
+        title: fmtDateBR(iso),
+        subtitle: `"${info.assessoria.nome}" está planejada para esse dia (${info.horas}h).`,
+        actions: [
+          { label:'Reagendar para outra data', style:'primary', value:'reagendar' },
+          { label:'Remover planejamento', style:'danger', value:'remover' },
+          { label:'Cancelar', style:'ghost', value:'cancel' }
+        ]
+      });
+      if (!result || result.action === 'cancel') return;
+      if (result.action === 'reagendar') {
         await reagendarEntradaPainel(info.assessoria, info.entrada, iso);
         return;
       }
-      if (confirm(`Remover o planejamento de ${fmtDateBR(iso)} (${info.horas}h) da assessoria "${info.assessoria.nome}"?`)) {
-        await removerPlanejamentoPainel(info.assessoria, iso);
-      }
+      const confirmado = await showActionPanel({
+        title: 'Remover planejamento?',
+        subtitle: `${fmtDateBR(iso)} · "${info.assessoria.nome}" · ${info.horas}h`,
+        actions: [
+          { label:'Remover', style:'danger', value:'sim' },
+          { label:'Cancelar', style:'ghost', value:'nao' }
+        ]
+      });
+      if (confirmado && confirmado.action === 'sim') await removerPlanejamentoPainel(info.assessoria, iso);
       return;
     }
     const comp = compensacaoNoDia(iso);
     if (comp) {
-      if (confirm(`Remover a compensação de ${fmtDateBR(iso)}${comp.motivo ? ' ('+comp.motivo+')' : ''}?`)) {
+      const confirmado = await showActionPanel({
+        title: 'Remover compensação?',
+        subtitle: `${fmtDateBR(iso)}${comp.motivo ? ' — ' + comp.motivo : ''}`,
+        actions: [
+          { label:'Remover', style:'danger', value:'sim' },
+          { label:'Cancelar', style:'ghost', value:'nao' }
+        ]
+      });
+      if (confirmado && confirmado.action === 'sim') {
         await sb.from('compensacoes').delete().eq('id', comp.id);
         compensacoesList = compensacoesList.filter(c => c.id !== comp.id);
         renderCalendario();
       }
       return;
     }
-    const motivo = prompt(`Marcar ${fmtDateBR(iso)} como compensação. Motivo (opcional):`, '');
-    if (motivo === null) return;
+    const result = await showActionPanel({
+      title: 'Marcar compensação',
+      subtitle: fmtDateBR(iso),
+      fields: [{ id:'motivo', label:'Motivo (opcional)', type:'text', placeholder:'Ex.: banco de horas' }],
+      actions: [
+        { label:'Marcar compensação', style:'primary', value:'ok' },
+        { label:'Cancelar', style:'ghost', value:'cancel' }
+      ]
+    });
+    if (!result || result.action !== 'ok') return;
     const { data: novaComp, error } = await sb.from('compensacoes').insert({
       owner_id: session.user.id,
       data_iso: iso,
-      motivo: motivo.trim() || null
+      motivo: result.values.motivo.trim() || null
     }).select().single();
     if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
     compensacoesList.push(novaComp);
@@ -407,9 +445,17 @@
   }
 
   async function reagendarEntradaPainel(assessoria, entrada, deISO){
-    const resposta = prompt(`Reagendar a visita de ${fmtDateBR(deISO)} (${entrada.horas}h) para qual data?`, fmtDateBR(deISO));
-    if (resposta === null) return;
-    const novaISO = parseBRDateToISO(resposta);
+    const result = await showActionPanel({
+      title: 'Reagendar visita',
+      subtitle: `"${assessoria.nome}" · de ${fmtDateBR(deISO)} · ${entrada.horas}h`,
+      fields: [{ id:'data', label:'Nova data', type:'text', value: fmtDateBR(deISO), placeholder:'DD/MM/AAAA' }],
+      actions: [
+        { label:'Reagendar', style:'primary', value:'ok' },
+        { label:'Cancelar', style:'ghost', value:'cancel' }
+      ]
+    });
+    if (!result || result.action !== 'ok') return;
+    const novaISO = parseBRDateToISO(result.values.data);
     if (!novaISO) { alert('Data inválida. Use o formato DD/MM/AAAA.'); return; }
     if (novaISO === deISO) return;
     const motivoBloqueio = planningBlockReasonPainel(novaISO, assessoria.id);

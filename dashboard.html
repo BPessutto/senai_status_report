@@ -541,6 +541,7 @@ import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
 import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO } from './js/calendar-utils.js';
+import { showActionPanel } from './js/action-panel.js';
 
 document.getElementById('btn-logout').addEventListener('click', logout);
 
@@ -1159,10 +1160,18 @@ function renderPlanejamento(){
     `Planejado: <strong>${totalPlanejado}h</strong> em ${state.visitasPlanejadas.length} visita(s) · Realizado: <strong>${totalReal}h</strong> · Previsto: <strong>${state.totalPrevisto}h</strong>${alertHtml}`;
 }
 
-function reagendarEntrada(entrada, deISO){
-  const respostaData = prompt(`Reagendar a visita de ${fmtDateBR(deISO)} (${entrada.horas}h) para qual data?`, fmtDateBR(deISO));
-  if(respostaData === null) return;
-  const novaISO = parseBRDateToISO(respostaData);
+async function reagendarEntrada(entrada, deISO){
+  const result = await showActionPanel({
+    title: 'Reagendar visita',
+    subtitle: `De ${fmtDateBR(deISO)} · ${entrada.horas}h`,
+    fields: [{ id:'data', label:'Nova data', type:'text', value: fmtDateBR(deISO), placeholder:'DD/MM/AAAA' }],
+    actions: [
+      { label:'Reagendar', style:'primary', value:'ok' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
+    ]
+  });
+  if(!result || result.action !== 'ok') return;
+  const novaISO = parseBRDateToISO(result.values.data);
   if(!novaISO){ alert('Data inválida. Use o formato DD/MM/AAAA.'); return; }
   if(novaISO === deISO) return;
   const motivo = planningBlockReason(novaISO);
@@ -1173,7 +1182,7 @@ function reagendarEntrada(entrada, deISO){
   saveState();
 }
 
-function onCalendarDayClick(iso){
+async function onCalendarDayClick(iso){
   if(!isOwner) return;
   const info = dayStateFor(iso);
 
@@ -1193,17 +1202,38 @@ function onCalendarDayClick(iso){
   }
 
   if(info && (info.type === 'ok' || info.type === 'divergente' || info.type === 'realizada-avulsa')){
-    alert(`Este dia já tem visita registrada (${info.actual}h). Para editar, use o histórico de visitas abaixo.`);
+    await showActionPanel({
+      title: fmtDateBR(iso),
+      subtitle: `Visita já registrada (${info.actual}h).\nPara editar, use o histórico de visitas abaixo.`,
+      actions: [{ label:'Entendi', style:'ghost' }]
+    });
     return;
   }
   if(info && (info.type === 'planejada' || info.type === 'atrasada')){
-    const querReagendar = confirm(`Este dia está planejado (${info.planned}h).\n\nOK = Reagendar para outra data\nCancelar = ver opção de remover`);
-    if(querReagendar){
+    const result = await showActionPanel({
+      title: fmtDateBR(iso),
+      subtitle: `Planejada: ${info.planned}h`,
+      actions: [
+        { label:'Reagendar para outra data', style:'primary', value:'reagendar' },
+        { label:'Remover planejamento', style:'danger', value:'remover' },
+        { label:'Cancelar', style:'ghost', value:'cancel' }
+      ]
+    });
+    if(!result || result.action === 'cancel') return;
+    if(result.action === 'reagendar'){
       const entrada = state.visitasPlanejadas.find(p => p.dataISO === iso);
-      if(entrada) reagendarEntrada(entrada, iso);
+      if(entrada) await reagendarEntrada(entrada, iso);
       return;
     }
-    if(!confirm(`Remover o planejamento de ${fmtDateBR(iso)} (${info.planned}h)?`)) return;
+    const confirmado = await showActionPanel({
+      title: 'Remover planejamento?',
+      subtitle: `${fmtDateBR(iso)} · ${info.planned}h`,
+      actions: [
+        { label:'Remover', style:'danger', value:'sim' },
+        { label:'Cancelar', style:'ghost', value:'nao' }
+      ]
+    });
+    if(!confirmado || confirmado.action !== 'sim') return;
     state.visitasPlanejadas = state.visitasPlanejadas.filter(p => p.dataISO !== iso);
     renderPlanejamento();
     saveState();
@@ -1211,12 +1241,24 @@ function onCalendarDayClick(iso){
   }
   const motivoBloqueio = planningBlockReason(iso);
   if(motivoBloqueio){
-    alert(`Não é possível planejar aqui: ${motivoBloqueio}`);
+    await showActionPanel({
+      title: fmtDateBR(iso),
+      subtitle: `Não é possível planejar aqui: ${motivoBloqueio}`,
+      actions: [{ label:'Entendi', style:'ghost' }]
+    });
     return;
   }
-  const answer = prompt(`Planejar visita em ${fmtDateBR(iso)} — quantas horas?`, '8');
-  if(answer === null) return;
-  const horas = Number(String(answer).trim().replace(',','.'));
+  const result = await showActionPanel({
+    title: `Planejar visita`,
+    subtitle: fmtDateBR(iso),
+    fields: [{ id:'horas', label:'Quantas horas?', type:'number', value:'8' }],
+    actions: [
+      { label:'Planejar', style:'primary', value:'ok' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
+    ]
+  });
+  if(!result || result.action !== 'ok') return;
+  const horas = Number(String(result.values.horas).trim().replace(',','.'));
   if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
   state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas });
   state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
