@@ -307,7 +307,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 
   <div class="session-bar no-print">
     <div class="left">
-      <a class="back-link" href="painel.html">‹ Minhas assessorias</a>
+      <a class="back-link" id="back-link" href="painel.html">‹ Minhas assessorias</a>
       <span class="role-badge hidden" id="role-badge"></span>
     </div>
     <div class="right">
@@ -585,6 +585,7 @@ if (!assessoriaId) {
 let session = null;
 let assessoriaRow = null;
 let isOwner = false;
+let isGestorUser = false;
 let state = null;
 let editingId = null;
 const expandedStages = new Set();
@@ -1656,10 +1657,19 @@ function applyHeaderInfo(){
   document.getElementById('header-sub').textContent =
     `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
   document.getElementById('session-email').textContent = session.user.email;
+  const isRealOwner = session.user.id === assessoriaRow.owner_id;
   const roleBadge = document.getElementById('role-badge');
-  roleBadge.textContent = isOwner ? 'Consultor' : 'Cliente (somente leitura)';
+  roleBadge.textContent = isRealOwner ? 'Consultor' : (isGestorUser ? 'Gestor (visualizando)' : 'Cliente (somente leitura)');
   roleBadge.className = 'role-badge ' + (isOwner ? 'owner' : 'client');
   roleBadge.classList.remove('hidden');
+  const backLink = document.getElementById('back-link');
+  if(!isRealOwner && isGestorUser){
+    backLink.href = `painel.html?as=${assessoriaRow.owner_id}`;
+    backLink.textContent = '‹ Painel do consultor';
+  } else {
+    backLink.href = 'painel.html';
+    backLink.textContent = '‹ Minhas assessorias';
+  }
   if(assessoriaRow.logo_url){
     document.getElementById('logo-cliente-img').src = assessoriaRow.logo_url;
     document.getElementById('logo-cliente-box').classList.remove('hidden');
@@ -1995,6 +2005,9 @@ async function boot(){
   session = await requireSession();
   if(!session) return;
 
+  const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+  isGestorUser = Boolean(perfil && perfil.role === 'gestor');
+
   const { data, error } = await sb.from('assessorias').select('*').eq('id', assessoriaId).single();
   if(error || !data){
     alert('Esta assessoria não existe ou você não tem acesso a ela.');
@@ -2002,15 +2015,19 @@ async function boot(){
     return;
   }
   assessoriaRow = data;
-  isOwner = session.user.id === data.owner_id;
+  // Dono da assessoria edita normalmente; gestor também pode editar
+  // qualquer assessoria de qualquer consultor, se quiser.
+  isOwner = session.user.id === data.owner_id || isGestorUser;
   state = data.data || {};
 
   if(isOwner){
-    const { data: outras } = await sb.from('assessorias').select('id,nome,data').eq('owner_id', session.user.id).neq('id', assessoriaId);
+    // Sempre em relação ao dono real da assessoria (não a quem está logado),
+    // pra funcionar certo tanto pro consultor quanto pro gestor acompanhando.
+    const { data: outras } = await sb.from('assessorias').select('id,nome,data').eq('owner_id', data.owner_id).neq('id', assessoriaId);
     outrasAssessorias = outras || [];
-    const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
+    const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', data.owner_id);
     compensacoes = comp || [];
-    const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', session.user.id);
+    const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', data.owner_id);
     feriadosMunicipais = feriados || [];
   }
 

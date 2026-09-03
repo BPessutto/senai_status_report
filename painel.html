@@ -55,6 +55,7 @@
       </div>
     </div>
     <div class="header-actions">
+      <a class="btn btn-ghost hidden" id="btn-voltar-gestor" href="gestor.html">‹ Painel gerencial</a>
       <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
       <button class="btn btn-ghost hidden" id="btn-ver-arquivadas">Ver arquivadas</button>
       <button class="btn btn-ghost" id="btn-logout">Sair</button>
@@ -147,6 +148,12 @@
   let isOwnerOfSomething = false;
   let mostrarArquivadas = false;
   let editingAssessoriaId = null;
+  let isGestorUser = false;
+  let viewAsId = null;
+  // Dono efetivo das assessorias mostradas: o próprio consultor logado, ou o
+  // consultor que o gestor escolheu acompanhar (?as=). Tudo que hoje usa
+  // session.user.id pra decidir "de quem é isso" passa a usar este valor.
+  let effectiveUserId = null;
 
   function openEditModal(row){
     editingAssessoriaId = row.id;
@@ -168,7 +175,7 @@
   }
 
   function renderCard(row){
-    const isOwner = row.owner_id === session.user.id;
+    const isOwner = row.owner_id === effectiveUserId;
     const pct = computeProgress(row.data);
     const status = currentStatus(row.data);
     const card = document.createElement('div');
@@ -230,13 +237,15 @@
   }
 
   async function loadAssessorias(){
-    const { data, error } = await sb.from('assessorias').select('*').order('created_at', { ascending: false });
+    let query = sb.from('assessorias').select('*').order('created_at', { ascending: false });
+    if (viewAsId) query = query.eq('owner_id', viewAsId);
+    const { data, error } = await query;
     if (error) {
       emptyState.textContent = 'Não foi possível carregar suas assessorias: ' + error.message;
       emptyState.classList.remove('hidden');
       return;
     }
-    isOwnerOfSomething = data.some(r => r.owner_id === session.user.id);
+    isOwnerOfSomething = data.some(r => r.owner_id === effectiveUserId);
     // Sem nenhuma assessoria ainda não dá pra saber se é o consultor (primeiro acesso)
     // ou um cliente sem convite — nesse caso deixamos o botão de criar visível também.
     btnNova.classList.toggle('hidden', !isOwnerOfSomething && data.length > 0);
@@ -274,14 +283,14 @@
     const calendarioCard = document.getElementById('calendario-card');
     if (isOwnerOfSomething && !mostrarArquivadas) {
       ownedAssessoriasSorted = ativas
-        .filter(r => r.owner_id === session.user.id)
+        .filter(r => r.owner_id === effectiveUserId)
         .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
       colorMap = new Map(ownedAssessoriasSorted.map((r,i) => [r.id, i]));
-      arquivadasParaCalendario = arquivadas.filter(r => r.owner_id === session.user.id);
+      arquivadasParaCalendario = arquivadas.filter(r => r.owner_id === effectiveUserId);
       calendarioCard.classList.remove('hidden');
-      const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
+      const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', effectiveUserId);
       compensacoesList = comp || [];
-      const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', session.user.id);
+      const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', effectiveUserId);
       feriadosMunicipaisList = feriados || [];
       renderCalendario();
     } else {
@@ -514,7 +523,7 @@
       });
       if (!result || result.action !== 'ok') return;
       const { data: novaComp, error } = await sb.from('compensacoes').insert({
-        owner_id: session.user.id,
+        owner_id: effectiveUserId,
         data_iso: iso,
         motivo: result.values.motivo.trim() || null
       }).select().single();
@@ -537,7 +546,7 @@
     const nome = result.values.nome.trim();
     if (!nome) { alert('Informe o nome do feriado.'); return; }
     const { data: novoFeriado, error } = await sb.from('feriados_municipais').insert({
-      owner_id: session.user.id,
+      owner_id: effectiveUserId,
       data_iso: iso,
       nome
     }).select().single();
@@ -646,7 +655,7 @@
     }
 
     const { data, error } = await sb.from('assessorias').insert({
-      owner_id: session.user.id,
+      owner_id: effectiveUserId,
       nome,
       cliente_nome: cliente_nome || null,
       municipio: municipio || null,
@@ -662,7 +671,31 @@
   (async () => {
     session = await requireSession();
     if (!session) return;
-    document.getElementById('user-email').textContent = session.user.email;
+
+    const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+    isGestorUser = Boolean(perfil && perfil.role === 'gestor');
+
+    const params = new URLSearchParams(window.location.search);
+    viewAsId = params.get('as');
+
+    // Gestor sem consultor escolhido: manda pro painel gerencial dele.
+    if (isGestorUser && !viewAsId) {
+      window.location.href = 'gestor.html';
+      return;
+    }
+
+    effectiveUserId = viewAsId || session.user.id;
+
+    if (viewAsId) {
+      const { data: perfilConsultor } = await sb.from('profiles').select('nome,email').eq('id', viewAsId).maybeSingle();
+      const nomeConsultor = (perfilConsultor && (perfilConsultor.nome || perfilConsultor.email)) || 'consultor';
+      document.getElementById('page-title').textContent = `Assessorias de ${nomeConsultor}`;
+      document.getElementById('user-email').textContent = `Visualizando como gestor · ${session.user.email}`;
+      document.getElementById('btn-voltar-gestor').classList.remove('hidden');
+    } else {
+      document.getElementById('user-email').textContent = session.user.email;
+    }
+
     loadAssessorias();
   })();
 </script>
