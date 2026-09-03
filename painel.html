@@ -101,10 +101,6 @@
         <label for="nova-proposta">Nº da proposta (opcional)</label>
         <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
       </div>
-      <div class="field" id="campo-importar-backup">
-        <label for="nova-backup">Importar de um backup (.json) — opcional</label>
-        <input type="file" id="nova-backup" accept="application/json,.json">
-      </div>
       <div class="modal-actions">
         <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="btn-salvar-nova">Criar assessoria</button>
@@ -161,7 +157,6 @@
     document.getElementById('nova-cliente').value = row.cliente_nome || '';
     document.getElementById('nova-municipio').value = row.municipio || '';
     document.getElementById('nova-proposta').value = row.proposta || '';
-    document.getElementById('campo-importar-backup').classList.add('hidden');
     document.getElementById('modal-nova').classList.remove('hidden');
   }
 
@@ -590,21 +585,9 @@
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
-    document.getElementById('campo-importar-backup').classList.remove('hidden');
     document.getElementById('modal-nova').classList.remove('hidden');
   });
   document.getElementById('btn-cancelar-nova').addEventListener('click', closeNovaModal);
-
-  async function lerBackupDoArquivo(file){
-    const texto = await file.text();
-    const parsed = JSON.parse(texto);
-    const importado = parsed && parsed.state ? parsed.state : parsed;
-    const valido = importado && Array.isArray(importado.etapas) && Array.isArray(importado.visitas);
-    if (!valido) throw new Error('O arquivo não possui a estrutura esperada (faltam "etapas" ou "visitas").');
-    if (!Array.isArray(importado.visitasPlanejadas)) importado.visitasPlanejadas = [];
-    return importado;
-  }
-
   document.getElementById('form-nova').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const nome = document.getElementById('nova-nome').value.trim();
@@ -625,24 +608,13 @@
       return;
     }
 
-    let novoData = defaultState();
-    const arquivo = document.getElementById('nova-backup').files[0];
-    if (arquivo) {
-      try {
-        novoData = await lerBackupDoArquivo(arquivo);
-      } catch (err) {
-        alert('Não foi possível importar o backup: ' + err.message);
-        return;
-      }
-    }
-
     const { data, error } = await sb.from('assessorias').insert({
       owner_id: session.user.id,
       nome,
       cliente_nome: cliente_nome || null,
       municipio: municipio || null,
       proposta: proposta || null,
-      data: novoData
+      data: defaultState()
     }).select().single();
     if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
     document.getElementById('modal-nova').classList.add('hidden');
