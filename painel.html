@@ -68,12 +68,6 @@
         <label for="nova-proposta">Nº da proposta (opcional)</label>
         <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
       </div>
-      <div class="field">
-        <label style="flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:12.5px;color:var(--text);font-weight:600">
-          <input type="checkbox" id="nova-bp" checked style="width:16px;height:16px">
-          Este projeto é do programa Brasil Mais Produtivo
-        </label>
-      </div>
       <div class="modal-actions">
         <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
         <button type="submit" class="btn btn-primary">Criar assessoria</button>
@@ -226,13 +220,11 @@
     const nome = document.getElementById('nova-nome').value.trim();
     const cliente_nome = document.getElementById('nova-cliente').value.trim();
     const proposta = document.getElementById('nova-proposta').value.trim();
-    const mostra_logo_bp = document.getElementById('nova-bp').checked;
     const { data, error } = await sb.from('assessorias').insert({
       owner_id: session.user.id,
       nome,
       cliente_nome: cliente_nome || null,
       proposta: proposta || null,
-      mostra_logo_bp,
       data: defaultState()
     }).select().single();
     if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
