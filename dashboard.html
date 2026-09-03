@@ -149,6 +149,8 @@ h1{margin:0;font-size:22px;font-weight:800}
 .bar-fill-mid{background:var(--amber)}
 .bar-fill-done{background:var(--green)}
 .stage-bar-pct{font-size:11px;font-weight:800;color:var(--navy);text-align:right;font-variant-numeric:tabular-nums}
+.stage-bar-block{display:grid;gap:3px}
+.stage-bar-previsao{font-size:10.5px;color:var(--muted);padding-left:70px}
 .visit-node{position:relative;flex:1;min-width:170px;padding-top:20px}
 .visit-node::before{content:'';position:absolute;top:7px;left:0;right:0;height:2px;background:var(--border)}
 .visit-node.done::before{background:var(--blue)}
@@ -897,6 +899,49 @@ window.removeDeliverable = function(stageId, deliverableId){
   saveState();
 };
 
+// Percorre as visitas planejadas (ainda não realizadas) em ordem cronológica e vai
+// "consumindo" as horas restantes de cada fase, na ordem das fases. Isso da, ao mesmo
+// tempo: (a) uma previsão aproximada de quando cada fase deve terminar, e (b) qual fase
+// cada visita planejada tende a avançar - sem precisar que o consultor marque a fase na
+// hora de planejar.
+function computeFasePrevisoes(){
+  const realizadas = new Set(state.visitas.map(v => v.dataISO));
+  const pendentes = state.visitasPlanejadas
+    .filter(p => !realizadas.has(p.dataISO))
+    .sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+
+  const porFase = [];
+  const tagPorData = {};
+  let idx = 0;
+  let usadoNaEntradaAtual = 0;
+
+  for (const etapa of state.etapas) {
+    let faltam = Math.max(0, Math.round((etapa.prev - etapa.real) * 100) / 100);
+    if (faltam <= 0) {
+      porFase.push({ etapaId: etapa.id, status: 'concluida', dataPrevista: null });
+      continue;
+    }
+    let dataPrevista = null;
+    while (faltam > 0 && idx < pendentes.length) {
+      const entrada = pendentes[idx];
+      if (tagPorData[entrada.dataISO] === undefined) tagPorData[entrada.dataISO] = etapa.id;
+      const disponivel = Number(entrada.horas) - usadoNaEntradaAtual;
+      if (disponivel <= faltam + 0.001) {
+        faltam = Math.round((faltam - disponivel) * 100) / 100;
+        usadoNaEntradaAtual = 0;
+        dataPrevista = entrada.dataISO;
+        idx++;
+      } else {
+        usadoNaEntradaAtual += faltam;
+        dataPrevista = entrada.dataISO;
+        faltam = 0;
+      }
+    }
+    porFase.push({ etapaId: etapa.id, status: faltam > 0 ? 'insuficiente' : 'estimada', dataPrevista });
+  }
+  return { porFase, tagPorData };
+}
+
 function renderTimeline(){
   const track = document.getElementById('timeline-track');
   let running = 0;
@@ -916,19 +961,23 @@ function renderTimeline(){
       </div>`;
   }).join('');
   const nextEtapa = nextOpenEtapa();
+  const { porFase, tagPorData } = computeFasePrevisoes();
   const realizadas = new Set(state.visitas.map(v => v.dataISO));
   const pendentes = state.visitasPlanejadas
     .filter(p => !realizadas.has(p.dataISO))
     .sort((a,b) => a.dataISO.localeCompare(b.dataISO));
-  const pendingNodes = pendentes.length ? pendentes.map((p,i) => `<div class="visit-node pending">
+  const pendingNodes = pendentes.length ? pendentes.map((p,i) => {
+    const etapaId = tagPorData[p.dataISO] || (nextEtapa && nextEtapa.id);
+    return `<div class="visit-node pending">
       <div class="visit-dot"></div>
       <div class="visit-card pending-card">
         <div class="visit-num">${i === 0 ? 'PRÓXIMA VISITA' : 'PLANEJADA'}</div>
         <div class="visit-date">${fmtDateBR(p.dataISO)}</div>
         <div class="visit-time">${p.horas}h planejadas</div>
-        ${tagRowHtml(nextEtapa ? [nextEtapa.id] : [])}
+        ${tagRowHtml(etapaId ? [etapaId] : [])}
       </div>
-    </div>`).join('') : `<div class="visit-node pending">
+    </div>`;
+  }).join('') : `<div class="visit-node pending">
       <div class="visit-dot"></div>
       <div class="visit-card pending-card">
         <div class="visit-num">PRÓXIMA VISITA</div>
@@ -937,19 +986,30 @@ function renderTimeline(){
       </div>
     </div>`;
   track.innerHTML = nodes + pendingNodes;
-  renderStageBars();
+  renderStageBars(porFase);
 }
 
-function renderStageBars(){
+function renderStageBars(porFase){
   const wrap = document.getElementById('stage-bars');
   if(!wrap) return;
+  const previsoes = porFase || computeFasePrevisoes().porFase;
+  const previsaoPorId = Object.fromEntries(previsoes.map(p => [p.etapaId, p]));
   wrap.innerHTML = state.etapas.map(e => {
     const pct = e.prev > 0 ? Math.min(1, e.real/e.prev) : 0;
     const corClasse = pct >= 1 ? 'bar-fill-done' : pct >= 0.5 ? 'bar-fill-mid' : 'bar-fill-low';
-    return `<div class="stage-bar-row">
-        <div class="stage-bar-label">${escapeHtml(e.curto)}</div>
-        <div class="stage-bar-track-h"><div class="stage-bar-fill-h ${corClasse}" style="width:${(pct*100).toFixed(1)}%"></div></div>
-        <div class="stage-bar-pct">${fmtPct(pct)}%</div>
+    const previsao = previsaoPorId[e.id];
+    const previsaoTexto = !previsao || previsao.status === 'concluida'
+      ? ''
+      : previsao.status === 'estimada'
+        ? `Previsão de conclusão: ${fmtDateBR(previsao.dataPrevista)}`
+        : 'Planeje mais visitas para estimar a conclusão';
+    return `<div class="stage-bar-block">
+        <div class="stage-bar-row">
+          <div class="stage-bar-label">${escapeHtml(e.curto)}</div>
+          <div class="stage-bar-track-h"><div class="stage-bar-fill-h ${corClasse}" style="width:${(pct*100).toFixed(1)}%"></div></div>
+          <div class="stage-bar-pct">${fmtPct(pct)}%</div>
+        </div>
+        ${previsaoTexto ? `<div class="stage-bar-previsao">${previsaoTexto}</div>` : ''}
       </div>`;
   }).join('');
 }
