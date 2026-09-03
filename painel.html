@@ -36,6 +36,7 @@
   .cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
   .cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:pointer;font-weight:700}
   .cal-feriado{background:#fef3c7;color:#92400e;cursor:pointer;font-weight:700}
+  .cal-arquivada{background:#e2e8f0;color:#64748b;cursor:pointer;font-weight:700}
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
 </style>
@@ -261,6 +262,7 @@
         .filter(r => r.owner_id === session.user.id)
         .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
       colorMap = new Map(ownedAssessoriasSorted.map((r,i) => [r.id, i]));
+      arquivadasParaCalendario = arquivadas.filter(r => r.owner_id === session.user.id);
       calendarioCard.classList.remove('hidden');
       const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
       compensacoesList = comp || [];
@@ -276,6 +278,7 @@
   // Calendário geral (consolidado de todas as assessorias)
   // ============================================================
   let ownedAssessoriasSorted = [];
+  let arquivadasParaCalendario = [];
   let colorMap = new Map();
   let compensacoesList = [];
   let feriadosMunicipaisList = [];
@@ -288,6 +291,17 @@
       if (actual > 0) return { assessoria: a, tipo: 'realizada', horas: actual };
       const planejada = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
       if (planejada) return { assessoria: a, tipo: 'planejada', horas: planejada.horas, entrada: planejada };
+    }
+    return null;
+  }
+
+  // Só o histórico (visitas já realizadas) de assessorias arquivadas — não bloqueia
+  // datas futuras, é só pra manter o registro visível em cinza no calendário.
+  function arquivadaDayInfo(iso){
+    for (const a of arquivadasParaCalendario) {
+      const d = a.data || {};
+      const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+      if (actual > 0) return { assessoria: a, horas: actual };
     }
     return null;
   }
@@ -314,6 +328,7 @@
       const info = consolidatedDayInfo(iso);
       const comp = !info ? compensacaoNoDia(iso) : null;
       const feriado = (!info && !comp) ? feriadoNoDia(iso) : null;
+      const arquivada = (!info && !comp && !feriado) ? arquivadaDayInfo(iso) : null;
       const isToday = iso === today;
       let style = '', title = '', cls = 'cal-cell' + (isToday ? ' cal-today' : '');
       if (info) {
@@ -335,6 +350,9 @@
       } else if (feriado) {
         cls += ' cal-feriado';
         title = `Feriado ${feriado.tipo}: ${feriado.nome}`;
+      } else if (arquivada) {
+        cls += ' cal-arquivada';
+        title = `Encerrada: ${arquivada.assessoria.nome} — ${arquivada.horas}h (arquivada)`;
       }
       return `<div class="${cls}" ${style} data-date="${iso}" data-clickable title="${escapeAttr(title)}">${d}</div>`;
     }).join('');
@@ -350,7 +368,8 @@
     const legenda = document.getElementById('calendario-legenda');
     legenda.innerHTML = ownedAssessoriasSorted.map((a,i) => `<span><i style="background:${colorForIndex(i)}"></i>${a.nome}</span>`).join('')
       + `<span><i style="background:#ede9fe"></i>Compensação</span>`
-      + `<span><i style="background:#fef3c7"></i>Feriado</span>`;
+      + `<span><i style="background:#fef3c7"></i>Feriado</span>`
+      + (arquivadasParaCalendario.length ? `<span><i style="background:#e2e8f0"></i>Encerrada (arquivada)</span>` : '');
     const meses = document.getElementById('calendario-meses');
     let html = '';
     for (let m = 0; m < 12; m++) html += renderMesConsolidado(calendarYear, m);
@@ -441,6 +460,19 @@
         feriadosMunicipaisList = feriadosMunicipaisList.filter(f => f.id !== feriado.registro.id);
         renderCalendario();
       }
+      return;
+    }
+    const arquivada = arquivadaDayInfo(iso);
+    if (arquivada) {
+      const result = await showActionPanel({
+        title: fmtDateBR(iso),
+        subtitle: `"${arquivada.assessoria.nome}" (arquivada) — ${arquivada.horas}h registradas nesse dia.`,
+        actions: [
+          { label:'Abrir essa assessoria', style:'primary', value:'abrir' },
+          { label:'Fechar', style:'ghost', value:'fechar' }
+        ]
+      });
+      if (result && result.action === 'abrir') window.location.href = `dashboard.html?id=${arquivada.assessoria.id}`;
       return;
     }
 
