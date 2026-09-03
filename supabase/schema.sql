@@ -17,6 +17,7 @@ create table if not exists public.assessorias (
   mostra_logo_bp boolean not null default true,
   ativo boolean not null default true,
   porte text not null default 'DEMAIS' check (porte in ('ME','EPP','DEMAIS')),
+  data_contratacao date,
   data jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

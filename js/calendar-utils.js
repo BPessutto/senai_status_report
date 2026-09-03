@@ -32,6 +32,24 @@ export function parseBRDateToISO(str){
   return iso;
 }
 
+// Soma (ou subtrai) dias a uma data ISO ("AAAA-MM-DD"), em UTC pra nunca sofrer
+// deslocamento de um dia por causa de fuso horário.
+export function addDaysISO(iso, days){
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+// Diferença em dias entre duas datas ISO (toIso - fromIso).
+export function diffDaysISO(fromIso, toIso){
+  const [y1, m1, d1] = fromIso.split('-').map(Number);
+  const [y2, m2, d2] = toIso.split('-').map(Number);
+  const a = Date.UTC(y1, m1 - 1, d1);
+  const b = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((b - a) / 86400000);
+}
+
 // Paleta estável por índice, usada para colorir cada assessoria no calendário consolidado.
 export const ASSESSORIA_PALETTE = ['#2f75b5','#c2410c','#15803d','#7c3aed','#be185d','#0891b2','#a16207','#4338ca'];
 export function colorForIndex(i){ return ASSESSORIA_PALETTE[i % ASSESSORIA_PALETTE.length]; }
