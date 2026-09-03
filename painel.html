@@ -27,6 +27,21 @@
   .modal-box h2{margin:0 0 14px;font-size:15px;color:var(--navy)}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
   .role-tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .cal-year-nav{display:flex;align-items:center;gap:8px;text-transform:none;font-size:12px;color:var(--navy);font-weight:800}
+  .cal-legenda-consolidado{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:10px}
+  .cal-legenda-consolidado i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .cal-meses-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .cal-month{border:1px solid var(--border);border-radius:10px;padding:10px;background:#fbfcfe}
+  .cal-month-title{font-weight:800;color:var(--navy);text-align:center;margin-bottom:8px;font-size:13px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-grid-head{margin-bottom:4px}
+  .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:6px;color:var(--text)}
+  .cal-head{font-weight:800;font-size:9.5px;color:var(--muted);text-transform:uppercase;aspect-ratio:auto}
+  .cal-empty{background:transparent}
+  .cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
+  .cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:pointer;font-weight:700}
+  .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
+  .cal-cell[data-clickable]{cursor:pointer}
 </style>
 </head>
 <body>
@@ -50,11 +65,24 @@
 
   <div id="grid" class="grid"></div>
   <div id="empty-state" class="empty-state hidden"></div>
+
+  <div class="card hidden" id="calendario-card">
+    <div class="card-title">
+      <span>Calendário geral</span>
+      <div class="cal-year-nav">
+        <button type="button" class="btn btn-sm" id="btn-ano-anterior">‹</button>
+        <span id="ano-atual-label"></span>
+        <button type="button" class="btn btn-sm" id="btn-ano-seguinte">›</button>
+      </div>
+    </div>
+    <div id="calendario-legenda" class="cal-legenda-consolidado"></div>
+    <div id="calendario-meses" class="cal-meses-grid"></div>
+  </div>
 </div>
 
 <div class="modal-backdrop hidden" id="modal-nova">
   <div class="modal-box">
-    <h2>Nova assessoria</h2>
+    <h2 id="modal-nova-titulo">Nova assessoria</h2>
     <form id="form-nova">
       <div class="field">
         <label for="nova-nome">Nome do projeto</label>
@@ -65,12 +93,16 @@
         <input type="text" id="nova-cliente" placeholder="Ex.: XPTO Indústria Ltda.">
       </div>
       <div class="field">
+        <label for="nova-municipio">Local / Município</label>
+        <input type="text" id="nova-municipio" placeholder="Ex.: Ribeirão Preto - SP">
+      </div>
+      <div class="field">
         <label for="nova-proposta">Nº da proposta (opcional)</label>
         <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
       </div>
       <div class="modal-actions">
         <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
-        <button type="submit" class="btn btn-primary">Criar assessoria</button>
+        <button type="submit" class="btn btn-primary" id="btn-salvar-nova">Criar assessoria</button>
       </div>
     </form>
   </div>
@@ -82,10 +114,16 @@
   import { sb } from './js/supabase-client.js';
   import { requireSession, logout } from './js/session.js';
   import { defaultState } from './js/stage-template.js';
+  import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex } from './js/calendar-utils.js';
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
   const btnNova = document.getElementById('btn-nova');
+
+  function escapeAttr(str){
+    return String(str == null ? '' : str)
+      .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
 
   document.getElementById('btn-logout').addEventListener('click', logout);
 
@@ -107,6 +145,26 @@
 
   let session = null;
   let isOwnerOfSomething = false;
+  let editingAssessoriaId = null;
+
+  function openEditModal(row){
+    editingAssessoriaId = row.id;
+    document.getElementById('modal-nova-titulo').textContent = 'Editar assessoria';
+    document.getElementById('btn-salvar-nova').textContent = 'Salvar alterações';
+    document.getElementById('nova-nome').value = row.nome || '';
+    document.getElementById('nova-cliente').value = row.cliente_nome || '';
+    document.getElementById('nova-municipio').value = row.municipio || '';
+    document.getElementById('nova-proposta').value = row.proposta || '';
+    document.getElementById('modal-nova').classList.remove('hidden');
+  }
+
+  function closeNovaModal(){
+    editingAssessoriaId = null;
+    document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
+    document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
+    document.getElementById('form-nova').reset();
+    document.getElementById('modal-nova').classList.add('hidden');
+  }
 
   async function loadClientEmails(assessoriaId, listEl){
     const { data, error } = await sb.from('assessoria_clientes').select('*').eq('assessoria_id', assessoriaId).order('created_at');
@@ -135,7 +193,7 @@
       <div>
         <span class="role-tag">${isOwner ? 'Você é o consultor' : 'Acesso de cliente (somente leitura)'}</span>
         <h3>${row.nome}</h3>
-        <div class="cliente">${row.cliente_nome || '—'}${row.proposta ? ' · Proposta ' + row.proposta : ''}</div>
+        <div class="cliente">${row.cliente_nome || '—'}${row.municipio ? ' · ' + row.municipio : ''}${row.proposta ? ' · Proposta ' + row.proposta : ''}</div>
       </div>
       <div>
         <div class="pct-row"><span>Progresso</span><strong>${fmtPct(pct)}%</strong></div>
@@ -144,6 +202,7 @@
       </div>
       <div class="card-actions">
         <a class="btn btn-primary btn-sm" href="dashboard.html?id=${row.id}">Abrir painel</a>
+        ${isOwner ? `<button type="button" class="btn btn-sm" data-editar="${row.id}">✎ Editar</button>` : ''}
         ${isOwner ? `<button type="button" class="btn btn-sm" data-toggle-clients="${row.id}">Compartilhar com cliente</button>` : ''}
       </div>
       ${isOwner ? `
@@ -160,6 +219,7 @@
     `;
 
     if (isOwner) {
+      card.querySelector(`[data-editar="${row.id}"]`).addEventListener('click', () => openEditModal(row));
       const toggleBtn = card.querySelector(`[data-toggle-clients="${row.id}"]`);
       const panel = card.querySelector(`#clients-${row.id}`);
       const listEl = card.querySelector(`#list-clients-${row.id}`);
@@ -207,23 +267,225 @@
     emptyState.classList.add('hidden');
     grid.innerHTML = '';
     data.forEach(row => grid.appendChild(renderCard(row)));
+
+    const calendarioCard = document.getElementById('calendario-card');
+    if (isOwnerOfSomething) {
+      ownedAssessoriasSorted = data
+        .filter(r => r.owner_id === session.user.id)
+        .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
+      colorMap = new Map(ownedAssessoriasSorted.map((r,i) => [r.id, i]));
+      calendarioCard.classList.remove('hidden');
+      const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
+      compensacoesList = comp || [];
+      renderCalendario();
+    } else {
+      calendarioCard.classList.add('hidden');
+    }
   }
 
+  // ============================================================
+  // Calendário geral (consolidado de todas as assessorias)
+  // ============================================================
+  let ownedAssessoriasSorted = [];
+  let colorMap = new Map();
+  let compensacoesList = [];
+  let calendarYear = new Date().getFullYear();
+
+  function consolidatedDayInfo(iso){
+    for (const a of ownedAssessoriasSorted) {
+      const d = a.data || {};
+      const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+      if (actual > 0) return { assessoria: a, tipo: 'realizada', horas: actual };
+      const planejada = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
+      if (planejada) return { assessoria: a, tipo: 'planejada', horas: planejada.horas, entrada: planejada };
+    }
+    return null;
+  }
+
+  function compensacaoNoDia(iso){
+    return compensacoesList.find(c => c.data_iso === iso) || null;
+  }
+
+  function renderMesConsolidado(year, month){
+    const cells = buildMonthGrid(year, month);
+    const today = todayISO();
+    const cellsHtml = cells.map(d => {
+      if (d === null) return `<div class="cal-cell cal-empty"></div>`;
+      const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const info = consolidatedDayInfo(iso);
+      const comp = !info ? compensacaoNoDia(iso) : null;
+      const isToday = iso === today;
+      let style = '', title = '', cls = 'cal-cell' + (isToday ? ' cal-today' : '');
+      if (info) {
+        const cor = colorForIndex(colorMap.get(info.assessoria.id) || 0);
+        style = `style="background:${cor}26;color:${cor};font-weight:700"`;
+        const totalPrevisto = (info.assessoria.data && info.assessoria.data.totalPrevisto) || 0;
+        title = [
+          `Título/Assessoria: ${info.assessoria.nome}`,
+          `Local/Município: ${info.assessoria.municipio || '—'}`,
+          `Horas Totais: ${totalPrevisto}h`,
+          `Horário: 08h00 - 17h00`,
+          `Carga horária: ${info.horas}h`,
+          `Deslocamento por dia: 00`,
+          `Consultores: A definir`
+        ].join('\n');
+      } else if (comp) {
+        cls += ' cal-compensacao';
+        title = `Compensação${comp.motivo ? ': ' + comp.motivo : ''}`;
+      }
+      return `<div class="${cls}" ${style} data-date="${iso}" data-clickable title="${escapeAttr(title)}">${d}</div>`;
+    }).join('');
+    return `<div class="cal-month">
+        <div class="cal-month-title">${MONTH_NAMES[month]} ${year}</div>
+        <div class="cal-grid cal-grid-head">${WEEKDAY_LABELS.map(w=>`<div class="cal-cell cal-head">${w}</div>`).join('')}</div>
+        <div class="cal-grid">${cellsHtml}</div>
+      </div>`;
+  }
+
+  function renderCalendario(){
+    document.getElementById('ano-atual-label').textContent = calendarYear;
+    const legenda = document.getElementById('calendario-legenda');
+    legenda.innerHTML = ownedAssessoriasSorted.map((a,i) => `<span><i style="background:${colorForIndex(i)}"></i>${a.nome}</span>`).join('')
+      + `<span><i style="background:#ede9fe"></i>Compensação</span>`;
+    const meses = document.getElementById('calendario-meses');
+    let html = '';
+    for (let m = 0; m < 12; m++) html += renderMesConsolidado(calendarYear, m);
+    meses.innerHTML = html;
+    meses.querySelectorAll('[data-date]').forEach(el => {
+      el.addEventListener('click', () => onCalendarioClick(el.dataset.date));
+    });
+  }
+
+  async function onCalendarioClick(iso){
+    const info = consolidatedDayInfo(iso);
+    if (info) {
+      if (info.tipo === 'realizada') {
+        if (confirm(`"${info.assessoria.nome}" já tem uma visita registrada nesse dia (${info.horas}h).\n\nAbrir essa assessoria?`)) {
+          window.location.href = `dashboard.html?id=${info.assessoria.id}`;
+        }
+        return;
+      }
+      // planejada, ainda não realizada
+      const querReagendar = confirm(`"${info.assessoria.nome}" está planejada para esse dia (${info.horas}h).\n\nOK = Reagendar para outra data\nCancelar = ver opção de remover`);
+      if (querReagendar) {
+        await reagendarEntradaPainel(info.assessoria, info.entrada, iso);
+        return;
+      }
+      if (confirm(`Remover o planejamento de ${fmtDateBR(iso)} (${info.horas}h) da assessoria "${info.assessoria.nome}"?`)) {
+        await removerPlanejamentoPainel(info.assessoria, iso);
+      }
+      return;
+    }
+    const comp = compensacaoNoDia(iso);
+    if (comp) {
+      if (confirm(`Remover a compensação de ${fmtDateBR(iso)}${comp.motivo ? ' ('+comp.motivo+')' : ''}?`)) {
+        await sb.from('compensacoes').delete().eq('id', comp.id);
+        compensacoesList = compensacoesList.filter(c => c.id !== comp.id);
+        renderCalendario();
+      }
+      return;
+    }
+    const motivo = prompt(`Marcar ${fmtDateBR(iso)} como compensação. Motivo (opcional):`, '');
+    if (motivo === null) return;
+    const { data: novaComp, error } = await sb.from('compensacoes').insert({
+      owner_id: session.user.id,
+      data_iso: iso,
+      motivo: motivo.trim() || null
+    }).select().single();
+    if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
+    compensacoesList.push(novaComp);
+    renderCalendario();
+  }
+
+  function planningBlockReasonPainel(iso, assessoriaAtualId){
+    const info = consolidatedDayInfo(iso);
+    if (info && info.assessoria.id !== assessoriaAtualId) return `Você já está na assessoria "${info.assessoria.nome}" nesse dia (${info.horas}h).`;
+    if (info && info.assessoria.id === assessoriaAtualId) return 'Já existe uma visita planejada ou registrada nessa data, nessa mesma assessoria.';
+    const comp = compensacaoNoDia(iso);
+    if (comp) return `Esse dia está marcado como compensação${comp.motivo ? ' ('+comp.motivo+')' : ''}.`;
+    return null;
+  }
+
+  async function reagendarEntradaPainel(assessoria, entrada, deISO){
+    const resposta = prompt(`Reagendar a visita de ${fmtDateBR(deISO)} (${entrada.horas}h) para qual data?`, fmtDateBR(deISO));
+    if (resposta === null) return;
+    const novaISO = parseBRDateToISO(resposta);
+    if (!novaISO) { alert('Data inválida. Use o formato DD/MM/AAAA.'); return; }
+    if (novaISO === deISO) return;
+    const motivoBloqueio = planningBlockReasonPainel(novaISO, assessoria.id);
+    if (motivoBloqueio) { alert(`Não é possível reagendar para essa data: ${motivoBloqueio}`); return; }
+
+    const novaData = JSON.parse(JSON.stringify(assessoria.data));
+    const alvo = (novaData.visitasPlanejadas||[]).find(p => p.id === entrada.id);
+    if (!alvo) return;
+    alvo.dataISO = novaISO;
+    novaData.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+
+    const { data: updated, error } = await sb.from('assessorias')
+      .update({ data: novaData })
+      .eq('id', assessoria.id)
+      .eq('updated_at', assessoria.updated_at)
+      .select('updated_at')
+      .maybeSingle();
+    if (error) { alert('Não foi possível reagendar: ' + error.message); return; }
+    if (!updated) { alert('Essa assessoria foi alterada em outro lugar enquanto você editava. Atualize a página e tente de novo.'); return; }
+    assessoria.data = novaData;
+    assessoria.updated_at = updated.updated_at;
+    renderCalendario();
+  }
+
+  async function removerPlanejamentoPainel(assessoria, iso){
+    const novaData = JSON.parse(JSON.stringify(assessoria.data));
+    novaData.visitasPlanejadas = (novaData.visitasPlanejadas||[]).filter(p => p.dataISO !== iso);
+    const { data: updated, error } = await sb.from('assessorias')
+      .update({ data: novaData })
+      .eq('id', assessoria.id)
+      .eq('updated_at', assessoria.updated_at)
+      .select('updated_at')
+      .maybeSingle();
+    if (error) { alert('Não foi possível remover: ' + error.message); return; }
+    if (!updated) { alert('Essa assessoria foi alterada em outro lugar enquanto você editava. Atualize a página e tente de novo.'); return; }
+    assessoria.data = novaData;
+    assessoria.updated_at = updated.updated_at;
+    renderCalendario();
+  }
+
+  document.getElementById('btn-ano-anterior').addEventListener('click', () => { calendarYear--; renderCalendario(); });
+  document.getElementById('btn-ano-seguinte').addEventListener('click', () => { calendarYear++; renderCalendario(); });
+
   document.getElementById('btn-nova').addEventListener('click', () => {
+    editingAssessoriaId = null;
+    document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
+    document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
+    document.getElementById('form-nova').reset();
     document.getElementById('modal-nova').classList.remove('hidden');
   });
-  document.getElementById('btn-cancelar-nova').addEventListener('click', () => {
-    document.getElementById('modal-nova').classList.add('hidden');
-  });
+  document.getElementById('btn-cancelar-nova').addEventListener('click', closeNovaModal);
   document.getElementById('form-nova').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const nome = document.getElementById('nova-nome').value.trim();
     const cliente_nome = document.getElementById('nova-cliente').value.trim();
+    const municipio = document.getElementById('nova-municipio').value.trim();
     const proposta = document.getElementById('nova-proposta').value.trim();
+
+    if (editingAssessoriaId) {
+      const { error } = await sb.from('assessorias').update({
+        nome,
+        cliente_nome: cliente_nome || null,
+        municipio: municipio || null,
+        proposta: proposta || null
+      }).eq('id', editingAssessoriaId);
+      if (error) { alert('Não foi possível salvar as alterações: ' + error.message); return; }
+      closeNovaModal();
+      loadAssessorias();
+      return;
+    }
+
     const { data, error } = await sb.from('assessorias').insert({
       owner_id: session.user.id,
       nome,
       cliente_nome: cliente_nome || null,
+      municipio: municipio || null,
       proposta: proposta || null,
       data: defaultState()
     }).select().single();
