@@ -48,6 +48,30 @@ create policy "compensacoes: owner full access"
   with check (owner_id = auth.uid());
 
 -- ============================================================
+-- Feriados municipais marcados manualmente pelo consultor (feriados
+-- nacionais sao calculados no proprio app, nao precisam de tabela)
+-- ============================================================
+create table if not exists public.feriados_municipais (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  data_iso date not null,
+  nome text not null,
+  created_at timestamptz not null default now(),
+  unique (owner_id, data_iso)
+);
+
+create index if not exists feriados_municipais_owner_idx on public.feriados_municipais (owner_id);
+
+alter table public.feriados_municipais enable row level security;
+
+drop policy if exists "feriados_municipais: owner full access" on public.feriados_municipais;
+create policy "feriados_municipais: owner full access"
+  on public.feriados_municipais
+  for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+-- ============================================================
 -- E-mails de clientes autorizados a ver (somente leitura) uma assessoria
 -- ============================================================
 create table if not exists public.assessoria_clientes (

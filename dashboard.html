@@ -260,6 +260,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .plan-legend i.dot-atrasada{background:#fde2e1}
 .plan-legend i.dot-ocupada{background:#e2e8f0}
 .plan-legend i.dot-compensacao{background:#ede9fe}
+.plan-legend i.dot-feriado{background:#fef3c7}
 .plan-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eaf2fb;border:1px solid #bfd3e5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);font-weight:700}
 .btn-xs{padding:6px 10px;font-size:11px}
 .btn-danger{background:var(--danger);color:#fff}
@@ -280,6 +281,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .cal-atrasada{background:#fde2e1;color:var(--danger);font-weight:700;cursor:pointer}
 .cal-ocupada{background:#e2e8f0;color:#475569;cursor:not-allowed;font-weight:700}
 .cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:not-allowed;font-weight:700}
+.cal-feriado{background:#fef3c7;color:#92400e;cursor:not-allowed;font-weight:700}
 .cal-selected{box-shadow:inset 0 0 0 2px var(--blue)}
 .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
 .plan-summary{margin-top:10px;font-size:12px;color:var(--muted)}
@@ -468,6 +470,7 @@ h1{margin:0;font-size:22px;font-weight:800}
       <span><i class="dot-atrasada"></i>Planejada e não registrada</span>
       <span><i class="dot-ocupada"></i>Ocupado em outra assessoria</span>
       <span><i class="dot-compensacao"></i>Compensação</span>
+      <span><i class="dot-feriado"></i>Feriado</span>
     </div>
     <div id="plan-bulk-bar" class="plan-bulk-bar hidden">
       <span id="plan-bulk-count">0 dia(s) selecionado(s)</span>
@@ -540,7 +543,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
 import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION } from './js/stage-template.js';
-import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO } from './js/calendar-utils.js';
+import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
 
 document.getElementById('btn-logout').addEventListener('click', logout);
@@ -1044,6 +1047,7 @@ function renderArchive(){
 let planCalendarBase = null;
 let outrasAssessorias = [];
 let compensacoes = [];
+let feriadosMunicipais = [];
 let selectionMode = false;
 const selectedDates = new Set();
 
@@ -1083,6 +1087,15 @@ function compensacaoInfo(iso){
   return compensacoes.find(c => c.data_iso === iso) || null;
 }
 
+function feriadoInfo(iso){
+  const municipal = feriadosMunicipais.find(f => f.data_iso === iso);
+  if(municipal) return { nome: municipal.nome, tipo: 'municipal' };
+  const ano = Number(iso.slice(0,4));
+  const nacional = nationalHolidayMap([ano]).get(iso);
+  if(nacional) return { nome: nacional, tipo: 'nacional' };
+  return null;
+}
+
 function planningBlockReason(iso){
   const local = dayStateFor(iso);
   if(local && (local.type === 'ok' || local.type === 'divergente' || local.type === 'realizada-avulsa')) return 'Já existe uma visita registrada nesta assessoria nesse dia.';
@@ -1091,6 +1104,8 @@ function planningBlockReason(iso){
   if(busy) return `Você já está na assessoria "${busy.nome}" nesse dia (${busy.horas}h).`;
   const comp = compensacaoInfo(iso);
   if(comp) return `Esse dia está marcado como compensação${comp.motivo ? ' ('+comp.motivo+')' : ''}.`;
+  const feriado = feriadoInfo(iso);
+  if(feriado) return `Esse dia é feriado ${feriado.tipo} (${feriado.nome}).`;
   return null;
 }
 
@@ -1103,9 +1118,10 @@ function renderMonthCard(year, month){
     const info = dayStateFor(iso);
     const busy = !info ? otherAssessoriaBusyInfo(iso) : null;
     const comp = (!info && !busy) ? compensacaoInfo(iso) : null;
+    const feriado = (!info && !busy && !comp) ? feriadoInfo(iso) : null;
     const isToday = iso === today;
     const isSelected = selectedDates.has(iso);
-    const typeClass = info ? 'cal-'+info.type : (busy ? 'cal-ocupada' : (comp ? 'cal-compensacao' : ''));
+    const typeClass = info ? 'cal-'+info.type : (busy ? 'cal-ocupada' : (comp ? 'cal-compensacao' : (feriado ? 'cal-feriado' : '')));
     const cls = 'cal-cell' + (typeClass ? ' '+typeClass : '') + (isToday ? ' cal-today' : '') + (isSelected ? ' cal-selected' : '');
     const title = info
       ? (info.type === 'divergente' ? `Planejado ${info.planned}h · Registrado ${info.actual}h`
@@ -1117,7 +1133,9 @@ function renderMonthCard(year, month){
         ? `Ocupado na assessoria "${busy.nome}": ${busy.horas}h · carga horária total ${busy.totalPrevisto}h`
         : comp
           ? `Compensação${comp.motivo ? ': '+comp.motivo : ''}`
-          : '';
+          : feriado
+            ? `Feriado ${feriado.tipo}: ${feriado.nome}`
+            : '';
     return `<div class="${cls}" data-date="${iso}" title="${escapeAttr(title)}">${d}</div>`;
   }).join('');
   return `<div class="cal-month">
@@ -1344,7 +1362,7 @@ function gerarDatasPlanejadas(){
     guard++;
     const iso = cursor.toISOString().slice(0,10);
     if(dias.includes(cursor.getDay()) && !existentes.has(iso)){
-      if(otherAssessoriaBusyInfo(iso) || compensacaoInfo(iso)){
+      if(otherAssessoriaBusyInfo(iso) || compensacaoInfo(iso) || feriadoInfo(iso)){
         existentes.add(iso);
         puladasPorConflito++;
       } else {
@@ -1791,6 +1809,8 @@ async function boot(){
     outrasAssessorias = outras || [];
     const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
     compensacoes = comp || [];
+    const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', session.user.id);
+    feriadosMunicipais = feriados || [];
   }
 
   ensureProjectSchema();

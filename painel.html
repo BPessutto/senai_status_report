@@ -40,6 +40,7 @@
   .cal-empty{background:transparent}
   .cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
   .cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:pointer;font-weight:700}
+  .cal-feriado{background:#fef3c7;color:#92400e;cursor:pointer;font-weight:700}
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
 </style>
@@ -114,7 +115,7 @@
   import { sb } from './js/supabase-client.js';
   import { requireSession, logout } from './js/session.js';
   import { defaultState } from './js/stage-template.js';
-  import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex } from './js/calendar-utils.js';
+  import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex, nationalHolidayMap } from './js/calendar-utils.js';
   import { showActionPanel } from './js/action-panel.js';
 
   const grid = document.getElementById('grid');
@@ -278,6 +279,8 @@
       calendarioCard.classList.remove('hidden');
       const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', session.user.id);
       compensacoesList = comp || [];
+      const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', session.user.id);
+      feriadosMunicipaisList = feriados || [];
       renderCalendario();
     } else {
       calendarioCard.classList.add('hidden');
@@ -290,6 +293,7 @@
   let ownedAssessoriasSorted = [];
   let colorMap = new Map();
   let compensacoesList = [];
+  let feriadosMunicipaisList = [];
   let calendarYear = new Date().getFullYear();
 
   function consolidatedDayInfo(iso){
@@ -307,6 +311,15 @@
     return compensacoesList.find(c => c.data_iso === iso) || null;
   }
 
+  function feriadoNoDia(iso){
+    const municipal = feriadosMunicipaisList.find(f => f.data_iso === iso);
+    if (municipal) return { nome: municipal.nome, tipo: 'municipal', registro: municipal };
+    const ano = Number(iso.slice(0,4));
+    const nacional = nationalHolidayMap([ano]).get(iso);
+    if (nacional) return { nome: nacional, tipo: 'nacional', registro: null };
+    return null;
+  }
+
   function renderMesConsolidado(year, month){
     const cells = buildMonthGrid(year, month);
     const today = todayISO();
@@ -315,6 +328,7 @@
       const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const info = consolidatedDayInfo(iso);
       const comp = !info ? compensacaoNoDia(iso) : null;
+      const feriado = (!info && !comp) ? feriadoNoDia(iso) : null;
       const isToday = iso === today;
       let style = '', title = '', cls = 'cal-cell' + (isToday ? ' cal-today' : '');
       if (info) {
@@ -333,6 +347,9 @@
       } else if (comp) {
         cls += ' cal-compensacao';
         title = `Compensação${comp.motivo ? ': ' + comp.motivo : ''}`;
+      } else if (feriado) {
+        cls += ' cal-feriado';
+        title = `Feriado ${feriado.tipo}: ${feriado.nome}`;
       }
       return `<div class="${cls}" ${style} data-date="${iso}" data-clickable title="${escapeAttr(title)}">${d}</div>`;
     }).join('');
@@ -347,7 +364,8 @@
     document.getElementById('ano-atual-label').textContent = calendarYear;
     const legenda = document.getElementById('calendario-legenda');
     legenda.innerHTML = ownedAssessoriasSorted.map((a,i) => `<span><i style="background:${colorForIndex(i)}"></i>${a.nome}</span>`).join('')
-      + `<span><i style="background:#ede9fe"></i>Compensação</span>`;
+      + `<span><i style="background:#ede9fe"></i>Compensação</span>`
+      + `<span><i style="background:#fef3c7"></i>Feriado</span>`;
     const meses = document.getElementById('calendario-meses');
     let html = '';
     for (let m = 0; m < 12; m++) html += renderMesConsolidado(calendarYear, m);
@@ -415,23 +433,84 @@
       }
       return;
     }
-    const result = await showActionPanel({
-      title: 'Marcar compensação',
-      subtitle: fmtDateBR(iso),
-      fields: [{ id:'motivo', label:'Motivo (opcional)', type:'text', placeholder:'Ex.: banco de horas' }],
+    const feriado = feriadoNoDia(iso);
+    if (feriado) {
+      if (feriado.tipo === 'nacional') {
+        await showActionPanel({
+          title: fmtDateBR(iso),
+          subtitle: `Feriado nacional: ${feriado.nome}`,
+          actions: [{ label:'Entendi', style:'ghost' }]
+        });
+        return;
+      }
+      const confirmado = await showActionPanel({
+        title: 'Remover feriado municipal?',
+        subtitle: `${fmtDateBR(iso)} — ${feriado.nome}`,
+        actions: [
+          { label:'Remover', style:'danger', value:'sim' },
+          { label:'Cancelar', style:'ghost', value:'nao' }
+        ]
+      });
+      if (confirmado && confirmado.action === 'sim') {
+        await sb.from('feriados_municipais').delete().eq('id', feriado.registro.id);
+        feriadosMunicipaisList = feriadosMunicipaisList.filter(f => f.id !== feriado.registro.id);
+        renderCalendario();
+      }
+      return;
+    }
+
+    const escolha = await showActionPanel({
+      title: fmtDateBR(iso),
+      subtitle: 'Esse dia está livre. O que deseja marcar?',
       actions: [
-        { label:'Marcar compensação', style:'primary', value:'ok' },
+        { label:'Marcar compensação', style:'primary', value:'compensacao' },
+        { label:'Marcar feriado municipal', style:'primary', value:'feriado' },
+        { label:'Cancelar', style:'ghost', value:'cancel' }
+      ]
+    });
+    if (!escolha || escolha.action === 'cancel') return;
+
+    if (escolha.action === 'compensacao') {
+      const result = await showActionPanel({
+        title: 'Marcar compensação',
+        subtitle: fmtDateBR(iso),
+        fields: [{ id:'motivo', label:'Motivo (opcional)', type:'text', placeholder:'Ex.: banco de horas' }],
+        actions: [
+          { label:'Marcar compensação', style:'primary', value:'ok' },
+          { label:'Cancelar', style:'ghost', value:'cancel' }
+        ]
+      });
+      if (!result || result.action !== 'ok') return;
+      const { data: novaComp, error } = await sb.from('compensacoes').insert({
+        owner_id: session.user.id,
+        data_iso: iso,
+        motivo: result.values.motivo.trim() || null
+      }).select().single();
+      if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
+      compensacoesList.push(novaComp);
+      renderCalendario();
+      return;
+    }
+
+    const result = await showActionPanel({
+      title: 'Marcar feriado municipal',
+      subtitle: fmtDateBR(iso),
+      fields: [{ id:'nome', label:'Nome do feriado', type:'text', placeholder:'Ex.: Aniversário da cidade' }],
+      actions: [
+        { label:'Marcar feriado', style:'primary', value:'ok' },
         { label:'Cancelar', style:'ghost', value:'cancel' }
       ]
     });
     if (!result || result.action !== 'ok') return;
-    const { data: novaComp, error } = await sb.from('compensacoes').insert({
+    const nome = result.values.nome.trim();
+    if (!nome) { alert('Informe o nome do feriado.'); return; }
+    const { data: novoFeriado, error } = await sb.from('feriados_municipais').insert({
       owner_id: session.user.id,
       data_iso: iso,
-      motivo: result.values.motivo.trim() || null
+      nome
     }).select().single();
-    if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
-    compensacoesList.push(novaComp);
+    if (error) { alert('Não foi possível marcar o feriado: ' + error.message); return; }
+    feriadosMunicipaisList.push(novoFeriado);
     renderCalendario();
   }
 
@@ -441,6 +520,8 @@
     if (info && info.assessoria.id === assessoriaAtualId) return 'Já existe uma visita planejada ou registrada nessa data, nessa mesma assessoria.';
     const comp = compensacaoNoDia(iso);
     if (comp) return `Esse dia está marcado como compensação${comp.motivo ? ' ('+comp.motivo+')' : ''}.`;
+    const feriado = feriadoNoDia(iso);
+    if (feriado) return `Esse dia é feriado ${feriado.tipo} (${feriado.nome}).`;
     return null;
   }
 
