@@ -807,7 +807,20 @@ function renderDeliverableItem(stageId, d){
     </div>`;
 }
 
+// Marca a fase como "Concluído" sozinha quando bate 100% da carga horária E
+// todos os entregáveis obrigatórios estão feitos — sem depender do status
+// escolhido manualmente na última visita.
+function aplicarConclusaoAutomatica(){
+  state.etapas.forEach(e => {
+    const entregaveis = Array.isArray(e.entregaveis) ? e.entregaveis : [];
+    const obrigatoriosCumpridos = entregaveis.filter(d => d.required).every(d => d.done);
+    const horasCompletas = Number(e.prev) > 0 && Number(e.real) >= Number(e.prev);
+    if(horasCompletas && obrigatoriosCumpridos) e.status = 'Concluído';
+  });
+}
+
 function renderEtapas(){
+  aplicarConclusaoAutomatica();
   const body = document.getElementById('etapas-body');
   body.innerHTML = state.etapas.map(e => {
     const hoursPct = e.prev > 0 ? e.real/e.prev : 0;
