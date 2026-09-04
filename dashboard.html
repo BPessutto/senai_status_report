@@ -1187,15 +1187,22 @@ function renderPlanejamento(){
   bulkBar.classList.toggle('hidden', !selectionMode);
   document.getElementById('plan-bulk-count').textContent = `${selectedDates.size} dia(s) selecionado(s)`;
 
-  const totalPlanejado = state.visitasPlanejadas.reduce((s,p) => s + Number(p.horas||0), 0);
+  // "Pendente" = planejado mas ainda sem visita realizada nessa data. Uma
+  // visita registrada sem nunca ter sido planejada (avulsa) já entra em
+  // totalReal, então não pode ser ignorada nessa conta — senão o aviso de
+  // "faltam planejar" fica errado (é exatamente esse o bug que gerou este
+  // comentário).
+  const realizadasSet = new Set(state.visitas.map(v => v.dataISO));
+  const pendentes = state.visitasPlanejadas.filter(p => !realizadasSet.has(p.dataISO));
+  const totalPendente = pendentes.reduce((s,p) => s + Number(p.horas||0), 0);
   const { totalReal } = computeTotals();
-  const diff = state.totalPrevisto - totalPlanejado;
+  const diff = state.totalPrevisto - totalReal - totalPendente;
   const margem = Number(document.getElementById('plan-horas') && document.getElementById('plan-horas').value) || 8;
   const alertHtml = Math.abs(diff) > margem
-    ? `<span class="plan-alert">⚠ ${diff > 0 ? `Faltam ${diff}h planejadas para cobrir o previsto` : `Planejado ${Math.abs(diff)}h a mais que o previsto`}</span>`
+    ? `<span class="plan-alert">⚠ ${diff > 0 ? `Faltam ${diff}h ainda sem nenhuma data marcada` : `Total planejado + realizado passa ${Math.abs(diff)}h do previsto`}</span>`
     : '';
   document.getElementById('plan-summary').innerHTML =
-    `Planejado: <strong>${totalPlanejado}h</strong> em ${state.visitasPlanejadas.length} visita(s) · Realizado: <strong>${totalReal}h</strong> · Previsto: <strong>${state.totalPrevisto}h</strong>${alertHtml}`;
+    `Realizado: <strong>${totalReal}h</strong> · Planejado (ainda não realizado): <strong>${totalPendente}h</strong> em ${pendentes.length} visita(s) · Previsto: <strong>${state.totalPrevisto}h</strong>${alertHtml}`;
 }
 
 async function reagendarEntrada(entrada, deISO){
