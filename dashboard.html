@@ -1714,7 +1714,7 @@ document.getElementById('bp-logo-toggle').addEventListener('change', async funct
 // São só um apoio visual pro consultor — nada aqui bloqueia nenhuma ação.
 const PRAZO_APONTAMENTO_DIAS = 60;
 const PRAZO_EDUCACIONAL_DIAS = 30;
-const PRAZO_ENCERRAMENTO_DIAS = 16 * 7;
+const PRAZO_ENCERRAMENTO_DIAS = 115; // 16 semanas (115 dias corridos), conforme regra oficial do B+P
 
 function computePrazosBP(){
   const contratacao = assessoriaRow.data_contratacao;
@@ -1805,7 +1805,7 @@ function computePrazosBP(){
       realizado: educRealizada, dataRealizado: assessoriaRow.acao_educacional_data
     },
     {
-      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria (16 semanas do 1º apontamento)',
+      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria — 16 semanas (115 dias) do 1º apontamento',
       prazo: prazoEncerramento, auto: prazoEncerramentoAuto, manual: encerramentoManual,
       status: encerramentoStatus, msg: encerramentoMsg
     }
