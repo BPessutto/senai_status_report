@@ -1800,12 +1800,12 @@ function computePrazosBP(){
   return [
     { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg },
     {
-      label: 'Ações educacionais (30 dias do 1º apontamento)', prazo: prazoEducacional,
+      label: 'Ações educacionais (30 dias)', prazo: prazoEducacional,
       status: educStatus, msg: educMsg, realizavel: true,
       realizado: educRealizada, dataRealizado: assessoriaRow.acao_educacional_data
     },
     {
-      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria — 16 semanas (115 dias) do 1º apontamento',
+      label: encerramentoManual ? 'Encerramento (definido pela sede)' : 'Encerramento (115 dias)',
       prazo: prazoEncerramento, auto: prazoEncerramentoAuto, manual: encerramentoManual,
       status: encerramentoStatus, msg: encerramentoMsg
     }
@@ -1847,8 +1847,8 @@ function renderPrazosBP(){
       <div class="prazo-label">${escapeHtml(educacional.label)}</div>
       <div class="prazo-data">${fmtDateBR(educacional.prazo)}</div>
       <div class="prazo-msg">${escapeHtml(educacional.msg)}</div>
-      <label class="prazo-check"><input type="checkbox" id="field-educacional-realizada" ${educacional.realizado ? 'checked' : ''} ${isOwner ? '' : 'disabled'}> Realizado — registrar pra referência</label>
-      <input type="date" class="prazo-data-input" id="field-educacional-data" value="${educacional.dataRealizado || ''}" ${(!isOwner || !educacional.realizado) ? 'disabled' : ''}>
+      <label class="prazo-check"><input type="checkbox" id="field-educacional-realizada" ${educacional.realizado ? 'checked' : ''} ${isOwner ? '' : 'disabled'}> Realizado</label>
+      ${educacional.realizado ? `<input type="date" class="prazo-data-input" id="field-educacional-data" value="${educacional.dataRealizado || ''}" ${isOwner ? '' : 'disabled'}>` : ''}
     </div>` + `
     <div class="prazo-item prazo-${encerramento.status}">
       <div class="prazo-label">${escapeHtml(encerramento.label)}</div>
@@ -1864,11 +1864,14 @@ function renderPrazosBP(){
     if(btnLimpar) btnLimpar.addEventListener('click', () => savePrazoEncerramentoManual(null));
 
     document.getElementById('field-educacional-realizada').addEventListener('change', function(){
-      saveAcaoEducacional(this.checked, this.checked ? (document.getElementById('field-educacional-data').value || todayISO()) : null);
+      saveAcaoEducacional(this.checked, this.checked ? todayISO() : null);
     });
-    document.getElementById('field-educacional-data').addEventListener('change', function(){
-      saveAcaoEducacional(true, this.value || null);
-    });
+    const fieldEducData = document.getElementById('field-educacional-data');
+    if(fieldEducData){
+      fieldEducData.addEventListener('change', function(){
+        saveAcaoEducacional(true, this.value || null);
+      });
+    }
   }
 }
 
