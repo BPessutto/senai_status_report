@@ -64,7 +64,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .prazo-item{border-radius:var(--radius-sm);padding:11px 13px;border:1px solid var(--border)}
 .prazo-item .prazo-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
 .prazo-item .prazo-data{font-size:15px;font-weight:800;margin-bottom:4px}
-.prazo-item .prazo-msg{font-size:12px;line-height:1.3}
+.prazo-item .prazo-msg{font-size:12px;line-height:1.3;white-space:pre-line}
 .prazo-data-input{font:inherit;font-size:15px;font-weight:800;margin-bottom:4px;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:2px 5px;background:#fff;color:inherit;width:100%}
 .prazo-item .link-btn{margin-top:2px;display:inline-block}
 .prazo-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-top:2px;cursor:pointer}
@@ -1800,15 +1800,15 @@ function computePrazosBP(){
   } else if(hoje > prazoApontamento){
     apontamentoStatus = 'vencido';
     apontamentoMsg = 'Prazo vencido e ainda não há visita registrada';
-    if(primeiraPlanejada) apontamentoMsg += ` — 1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}`;
+    if(primeiraPlanejada) apontamentoMsg += `\n1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}`;
   } else {
     const dias = diffDaysISO(hoje, prazoApontamento);
     const planejadaAtrasada = primeiraPlanejada && primeiraPlanejada > prazoApontamento;
     apontamentoStatus = planejadaAtrasada ? 'atencao' : (dias <= 7 ? 'atencao' : 'ok');
     apontamentoMsg = `Faltam ${dias} dia(s) para o 1º apontamento`;
     apontamentoMsg += primeiraPlanejada
-      ? ` — 1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}${planejadaAtrasada ? ' (depois do prazo!)' : ''}`
-      : ' — nenhuma visita planejada ainda';
+      ? `\n1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}${planejadaAtrasada ? ' (depois do prazo!)' : ''}`
+      : '\nNenhuma visita planejada ainda';
   }
 
   const educRealizada = Boolean(assessoriaRow.acao_educacional_realizada);
