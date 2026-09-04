@@ -1103,9 +1103,9 @@ function otherAssessoriaBusyInfo(iso){
   for(const a of outrasAssessorias){
     const d = a.data || {};
     const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-    if(actual > 0) return { nome: a.nome, horas: actual, totalPrevisto: d.totalPrevisto };
+    if(actual > 0) return { nome: a.nome, municipio: a.municipio, horas: actual, totalPrevisto: d.totalPrevisto };
     const planned = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
-    if(planned) return { nome: a.nome, horas: planned.horas, totalPrevisto: d.totalPrevisto };
+    if(planned) return { nome: a.nome, municipio: a.municipio, horas: planned.horas, totalPrevisto: d.totalPrevisto };
   }
   return null;
 }
@@ -1157,7 +1157,15 @@ function renderMonthCard(year, month){
         : info.type === 'planejada' ? `Planejada: ${info.planned}h`
         : `Visita registrada: ${info.actual}h`)
       : busy
-        ? `Ocupado na assessoria "${busy.nome}": ${busy.horas}h · carga horária total ${busy.totalPrevisto}h`
+        ? [
+            `Título/Assessoria: ${busy.nome}`,
+            `Local/Município: ${busy.municipio || '—'}`,
+            `Horas Totais: ${busy.totalPrevisto || 0}h`,
+            `Horário: 08h00 - 17h00`,
+            `Carga horária: ${busy.horas}h`,
+            `Deslocamento por dia: 00`,
+            `Consultores: A definir`
+          ].join('\n')
         : comp
           ? `Compensação${comp.motivo ? ': '+comp.motivo : ''}`
           : feriado
@@ -2237,7 +2245,7 @@ async function boot(){
   if(isOwner){
     // Sempre em relação ao dono real da assessoria (não a quem está logado),
     // pra funcionar certo tanto pro consultor quanto pro gestor acompanhando.
-    const { data: outras } = await sb.from('assessorias').select('id,nome,data').eq('owner_id', data.owner_id).neq('id', assessoriaId);
+    const { data: outras } = await sb.from('assessorias').select('id,nome,municipio,data').eq('owner_id', data.owner_id).neq('id', assessoriaId);
     outrasAssessorias = outras || [];
     const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', data.owner_id);
     compensacoes = comp || [];
