@@ -1719,12 +1719,17 @@ function computePrazosBP(){
   const hoje = todayISO();
   const prazoApontamento = addDaysISO(contratacao, PRAZO_APONTAMENTO_DIAS);
   const prazoEducacional = addDaysISO(contratacao, PRAZO_EDUCACIONAL_DIAS);
-  const prazoEncerramentoAuto = addDaysISO(contratacao, PRAZO_ENCERRAMENTO_DIAS);
-  const encerramentoManual = Boolean(assessoriaRow.prazo_encerramento_manual);
-  const prazoEncerramento = assessoriaRow.prazo_encerramento_manual || prazoEncerramentoAuto;
 
   const visitasRealizadas = (state.visitas || []).map(v => v.dataISO).sort();
   const primeiraVisita = visitasRealizadas[0] || null;
+
+  // As 16 semanas contam a partir do 1º apontamento de horas, não da
+  // contratação. Enquanto não há 1ª visita registrada, usamos a contratação
+  // só como estimativa provisória (o rótulo deixa isso claro).
+  const encerramentoBaseadoEmContratacao = !primeiraVisita;
+  const prazoEncerramentoAuto = addDaysISO(primeiraVisita || contratacao, PRAZO_ENCERRAMENTO_DIAS);
+  const encerramentoManual = Boolean(assessoriaRow.prazo_encerramento_manual);
+  const prazoEncerramento = assessoriaRow.prazo_encerramento_manual || prazoEncerramentoAuto;
 
   let apontamentoStatus, apontamentoMsg;
   if(primeiraVisita && primeiraVisita <= prazoApontamento){
@@ -1774,12 +1779,15 @@ function computePrazosBP(){
     encerramentoStatus = dias <= 14 ? 'atencao' : 'ok';
     encerramentoMsg = `Faltam ${dias} dia(s) para o encerramento`;
   }
+  if(!encerramentoManual && encerramentoBaseadoEmContratacao){
+    encerramentoMsg += ' (estimativa pela contratação — recalcula quando a 1ª visita for registrada)';
+  }
 
   return [
     { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg },
     { label: 'Ações educacionais (30 dias)', prazo: prazoEducacional, status: educStatus, msg: educMsg },
     {
-      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria (16 semanas)',
+      label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria (16 semanas do 1º apontamento)',
       prazo: prazoEncerramento, auto: prazoEncerramentoAuto, manual: encerramentoManual,
       status: encerramentoStatus, msg: encerramentoMsg
     }
