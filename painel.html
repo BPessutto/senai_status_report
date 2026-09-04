@@ -39,6 +39,7 @@
   .cal-arquivada{background:#e2e8f0;color:#64748b;cursor:pointer;font-weight:700}
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
+  .banco-note-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);margin-bottom:8px}
   .banco-linha{font-size:12.5px;color:var(--muted);margin-bottom:6px}
   .banco-saldo{font-size:13.5px;font-weight:800;padding:8px 12px;border-radius:var(--radius-sm);display:inline-block}
   .banco-ok{background:var(--greenbg);color:var(--green)}
@@ -76,6 +77,7 @@
     <div class="card-title">
       <span>Calendário geral</span>
       <div class="cal-year-nav">
+        <button type="button" class="btn btn-sm" id="btn-banco-horas" title="Banco de Horas Para Compensação">🏦</button>
         <button type="button" class="btn btn-sm" id="btn-ano-anterior">‹</button>
         <span id="ano-atual-label"></span>
         <button type="button" class="btn btn-sm" id="btn-ano-seguinte">›</button>
@@ -83,11 +85,6 @@
     </div>
     <div id="calendario-legenda" class="cal-legenda-consolidado"></div>
     <div id="calendario-meses" class="cal-meses-grid"></div>
-  </div>
-
-  <div class="card hidden" id="banco-horas-card">
-    <div class="card-title">Banco de horas de deslocamento</div>
-    <div id="banco-horas-body"></div>
   </div>
 </div>
 
@@ -306,10 +303,8 @@
       const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', effectiveUserId);
       feriadosMunicipaisList = feriados || [];
       renderCalendario();
-      renderBancoDeHoras();
     } else {
       calendarioCard.classList.add('hidden');
-      document.getElementById('banco-horas-card').classList.add('hidden');
     }
   }
 
@@ -346,16 +341,14 @@
     return { geradoMes, compensadoMes, saldoTotal, saldoAnterior, mesAtual };
   }
 
-  function renderBancoDeHoras(){
-    const card = document.getElementById('banco-horas-card');
-    card.classList.remove('hidden');
+  function bancoDeHorasNoteHtml(){
     const b = computeBancoDeHoras();
     const [ano, mes] = b.mesAtual.split('-');
     const nomeMes = MONTH_NAMES[Number(mes) - 1];
     const statusClass = b.saldoTotal <= 0 ? 'banco-ok' : (b.saldoAnterior > 0 ? 'banco-vencido' : 'banco-atencao');
-    document.getElementById('banco-horas-body').innerHTML = `
+    return `
       <div class="banco-linha">${nomeMes}/${ano}: gerado ${b.geradoMes}h de deslocamento · compensado ${b.compensadoMes}h</div>
-      <div class="banco-saldo ${statusClass}">Saldo do banco de horas: ${b.saldoTotal}h${b.saldoTotal > 0 ? ' a compensar' : ''}</div>
+      <div class="banco-saldo ${statusClass}">Saldo: ${b.saldoTotal}h${b.saldoTotal > 0 ? ' a compensar' : ''}</div>
       ${b.saldoAnterior > 0 ? `<div class="banco-aviso">⚠ ${b.saldoAnterior}h desse saldo vêm de meses anteriores — regularize o quanto antes.</div>` : ''}
     `;
   }
@@ -520,7 +513,6 @@
         await sb.from('compensacoes').delete().eq('id', comp.id);
         compensacoesList = compensacoesList.filter(c => c.id !== comp.id);
         renderCalendario();
-        renderBancoDeHoras();
       }
       return;
     }
@@ -570,7 +562,8 @@
         { label:'Marcar compensação', style:'primary', value:'compensacao' },
         { label:'Marcar feriado municipal', style:'primary', value:'feriado' },
         { label:'Cancelar', style:'ghost', value:'cancel' }
-      ]
+      ],
+      note: `<div class="banco-note-title">Banco de Horas Para Compensação</div>${bancoDeHorasNoteHtml()}`
     });
     if (!escolha || escolha.action === 'cancel') return;
 
@@ -599,7 +592,6 @@
       if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
       compensacoesList.push(novaComp);
       renderCalendario();
-      renderBancoDeHoras();
       return;
     }
 
@@ -690,6 +682,14 @@
 
   document.getElementById('btn-ano-anterior').addEventListener('click', () => { calendarYear--; renderCalendario(); });
   document.getElementById('btn-ano-seguinte').addEventListener('click', () => { calendarYear++; renderCalendario(); });
+
+  document.getElementById('btn-banco-horas').addEventListener('click', () => {
+    showActionPanel({
+      title: 'Banco de Horas Para Compensação',
+      note: bancoDeHorasNoteHtml(),
+      actions: [{ label:'Fechar', style:'ghost' }]
+    });
+  });
 
   document.getElementById('btn-ver-arquivadas').addEventListener('click', () => {
     mostrarArquivadas = !mostrarArquivadas;

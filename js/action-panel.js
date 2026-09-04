@@ -22,6 +22,7 @@ function ensureStyles(){
     .ap-field input{border:1px solid #d9e2ec;border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;box-sizing:border-box;width:100%}
     .ap-field input:focus{outline:none;border-color:#2f75b5;box-shadow:0 0 0 3px rgba(47,117,181,.12)}
     .ap-actions{padding:16px 20px;border-top:1px solid #e2e8f0;display:flex;flex-direction:column;gap:8px}
+    .ap-note{padding:16px 20px;border-top:1px solid #e2e8f0}
     .ap-btn{border:0;border-radius:8px;padding:11px 14px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;text-align:center;transition:filter .12s ease}
     .ap-btn:hover{filter:brightness(.96)}
     .ap-btn-primary{background:#2f75b5;color:#fff}
@@ -31,9 +32,10 @@ function ensureStyles(){
   document.head.appendChild(style);
 }
 
-// options: { title, subtitle, fields:[{id,label,type,value,placeholder}], actions:[{label,style,value}] }
+// options: { title, subtitle, fields:[{id,label,type,value,placeholder}], actions:[{label,style,value}], note }
+// "note" é um bloco de HTML livre, mostrado depois dos botões de ação (ex.: um resumo informativo).
 // Resolve com { action, values } quando um botão é clicado, ou null se fechado sem escolher.
-export function showActionPanel({ title, subtitle, fields = [], actions = [] }){
+export function showActionPanel({ title, subtitle, fields = [], actions = [], note = '' }){
   ensureStyles();
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
@@ -58,6 +60,7 @@ export function showActionPanel({ title, subtitle, fields = [], actions = [] }){
       </div>
       ${fields.length ? `<div class="ap-body">${fieldsHtml}</div>` : ''}
       <div class="ap-actions">${actions.map((a,i) => `<button type="button" class="ap-btn ap-btn-${a.style||'ghost'}" data-action-idx="${i}">${a.label}</button>`).join('')}</div>
+      ${note ? `<div class="ap-note">${note}</div>` : ''}
     `;
 
     document.body.appendChild(backdrop);
