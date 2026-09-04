@@ -16,7 +16,7 @@ create table if not exists public.assessorias (
   logo_url text,
   mostra_logo_bp boolean not null default true,
   ativo boolean not null default true,
-  porte text not null default 'DEMAIS' check (porte in ('ME','EPP','DEMAIS')),
+  porte text check (porte in ('ME','EPP','DEMAIS')),
   data_contratacao date,
   prazo_encerramento_manual date,
   acao_educacional_realizada boolean not null default false,

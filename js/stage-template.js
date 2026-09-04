@@ -56,11 +56,13 @@ export const PORTE_LABELS = {
 // Reaplica a carga horária prevista de cada fase conforme o porte, sem tocar
 // em entregáveis, visitas ou horas já realizadas. Usado na criação e também
 // se o consultor corrigir o porte de uma assessoria já existente.
+// Sem porte definido (null/vazio), zera a carga prevista em vez de "chutar"
+// DEMAIS por baixo do pano — o consultor precisa escolher o porte de propósito.
 export function applyPorteHours(data, porte) {
-  const horas = PORTE_HOURS[porte] || PORTE_HOURS.DEMAIS;
+  const horas = PORTE_HOURS[porte] || null;
   const etapas = (data.etapas || []).map(e => ({
     ...e,
-    prev: horas[e.id] != null ? horas[e.id] : e.prev
+    prev: horas ? (horas[e.id] != null ? horas[e.id] : e.prev) : 0
   }));
   return {
     ...data,
@@ -117,7 +119,7 @@ export function computeFasePrevisoes(state){
   return { porFase, tagPorData };
 }
 
-export function defaultState(porte = 'DEMAIS') {
+export function defaultState(porte = null) {
   const etapas = STAGE_DEFINITIONS.map(def => ({
     id: def.id,
     curto: def.curto,

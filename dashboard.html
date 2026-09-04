@@ -84,6 +84,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .gauge-kpi svg{flex-shrink:0}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-top:14px}
+#porte-aviso-card{background:var(--amberbg);border:1px solid #f0d38a;color:var(--amber);font-size:13px;font-weight:700}
 .card-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between}
 .card-title-left{display:flex;align-items:center;gap:8px}
 .card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}
@@ -347,6 +348,7 @@ h1{margin:0;font-size:22px;font-weight:800}
         Programa Brasil Mais Produtivo
       </label>
       <select class="porte-select hidden" id="porte-select" title="Porte da empresa — define a carga horária de cada fase do B+P">
+        <option value="">-- Selecione o porte --</option>
         <option value="ME">ME — Microempresa (76h)</option>
         <option value="EPP">EPP — Empresa de Pequeno Porte (106h)</option>
         <option value="DEMAIS">Demais portes (116h)</option>
@@ -354,6 +356,10 @@ h1{margin:0;font-size:22px;font-weight:800}
       <button class="btn" id="btn-emitir">Emitir relatório das visitas</button>
     </div>
   </header>
+
+  <div class="card no-print hidden" id="porte-aviso-card">
+    ⚠️ <strong>Selecione o porte da empresa</strong> (ME / EPP / Demais) no cabeçalho acima antes de planejar ou registrar visitas — isso define a carga horária correta desta assessoria e evita divergência depois.
+  </div>
 
   <div class="kpi-row no-print">
     <div class="kpi gauge-kpi">
@@ -1230,6 +1236,14 @@ async function reagendarEntrada(entrada, deISO){
 
 async function onCalendarDayClick(iso){
   if(!isOwner) return;
+  if(porteFaltando()){
+    await showActionPanel({
+      title: 'Selecione o porte primeiro',
+      subtitle: 'Escolha o porte da empresa (ME/EPP/Demais) no cabeçalho, no topo da página, antes de planejar visitas nesta assessoria.',
+      actions: [{ label:'Entendi', style:'ghost' }]
+    });
+    return;
+  }
   const info = dayStateFor(iso);
 
   if(selectionMode){
@@ -1443,6 +1457,7 @@ function limparPlanejamento(){
 
 function gerarDatasPlanejadas(){
   if(!isOwner) return;
+  if(porteFaltando()){ alert('Selecione o porte da empresa (no cabeçalho) antes de gerar o planejamento.'); return; }
   const dias = Array.from(document.querySelectorAll('.plan-weekday:checked')).map(el => Number(el.value));
   if(!dias.length){ alert('Selecione ao menos um dia da semana.'); return; }
   const startISO = document.getElementById('plan-inicio').value || todayISO();
@@ -1460,15 +1475,21 @@ function gerarDatasPlanejadas(){
   let cursor = new Date(startISO + 'T00:00:00');
   let acumulado = 0;
   let guard = 0;
-  let puladasPorConflito = 0;
+  let puladasOcupado = 0, puladasCompensacao = 0, puladasFeriado = 0;
   const novas = [];
   while(acumulado < horasRestantes && guard < 2000){
     guard++;
     const iso = cursor.toISOString().slice(0,10);
     if(dias.includes(cursor.getDay()) && !existentes.has(iso)){
-      if(otherAssessoriaBusyInfo(iso) || compensacaoInfo(iso) || feriadoInfo(iso)){
+      if(otherAssessoriaBusyInfo(iso)){
         existentes.add(iso);
-        puladasPorConflito++;
+        puladasOcupado++;
+      } else if(compensacaoInfo(iso)){
+        existentes.add(iso);
+        puladasCompensacao++;
+      } else if(feriadoInfo(iso)){
+        existentes.add(iso);
+        puladasFeriado++;
       } else {
         novas.push({ id: makeId(), dataISO: iso, horas: horasPorVisita, deslocamentoHoras: deslocamentoPorVisita || undefined });
         existentes.add(iso);
@@ -1483,7 +1504,11 @@ function gerarDatasPlanejadas(){
   planCalendarBase = null;
   renderPlanejamento();
   saveState();
-  const aviso = puladasPorConflito ? ` (${puladasPorConflito} data(s) foram puladas por já estarem ocupadas em outra assessoria)` : '';
+  const motivos = [];
+  if(puladasOcupado) motivos.push(`${puladasOcupado} por já estar ocupado em outra assessoria`);
+  if(puladasCompensacao) motivos.push(`${puladasCompensacao} por compensação`);
+  if(puladasFeriado) motivos.push(`${puladasFeriado} por feriado`);
+  const aviso = motivos.length ? ` (data(s) pulada(s): ${motivos.join(', ')})` : '';
   alert(`${novas.length} data(s) planejada(s) adicionada(s), somando ${acumulado}h.${aviso}`);
 }
 
@@ -1755,7 +1780,7 @@ function applyHeaderInfo(){
   }
   document.getElementById('logo-bp-box').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
   document.getElementById('bp-logo-toggle').checked = Boolean(assessoriaRow.mostra_logo_bp);
-  document.getElementById('porte-select').value = assessoriaRow.porte || 'DEMAIS';
+  document.getElementById('porte-select').value = assessoriaRow.porte || '';
   document.getElementById('field-contratacao').value = assessoriaRow.data_contratacao || '';
 }
 
@@ -1765,6 +1790,25 @@ function applyRoleUI(){
   document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
   document.getElementById('prazos-bp-card').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
+  applyPorteGate();
+}
+
+// Enquanto o B+P estiver ativo e o porte não tiver sido escolhido, trava
+// planejamento e registro de visita — evita repetir a divergência de horas
+// que já aconteceu por planejar em cima do porte errado (ou de nenhum).
+function porteFaltando(){
+  return isOwner && assessoriaRow.mostra_logo_bp && !assessoriaRow.porte;
+}
+function applyPorteGate(){
+  const bloqueado = porteFaltando();
+  document.getElementById('porte-aviso-card').classList.toggle('hidden', !bloqueado);
+  document.getElementById('btn-toggle-form').disabled = bloqueado;
+  document.getElementById('btn-gerar-datas').disabled = bloqueado;
+  document.getElementById('btn-selecionar-multiplos').disabled = bloqueado;
+  document.getElementById('plan-inicio').disabled = bloqueado;
+  document.getElementById('plan-horas').disabled = bloqueado;
+  document.getElementById('plan-deslocamento').disabled = bloqueado;
+  document.querySelectorAll('.plan-weekday').forEach(cb => { cb.disabled = bloqueado; });
 }
 
 document.getElementById('bp-logo-toggle').addEventListener('change', async function(){
@@ -1998,7 +2042,7 @@ document.getElementById('field-contratacao').addEventListener('change', async fu
 
 document.getElementById('porte-select').addEventListener('change', async function(){
   if(!isOwner) return;
-  const porte = this.value;
+  const porte = this.value || null;
   const { data: updated, error } = await sb.from('assessorias')
     .update({ porte })
     .eq('id', assessoriaId)
@@ -2012,6 +2056,7 @@ document.getElementById('porte-select').addEventListener('change', async functio
   assessoriaRow.updated_at = updated.updated_at;
   state = applyPorteHours(state, porte);
   applyHeaderInfo();
+  applyPorteGate();
   renderAll();
 });
 
