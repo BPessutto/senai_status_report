@@ -741,9 +741,15 @@ function computeTotals(){
 function lastVisit(){ return state.visitas.length ? state.visitas[state.visitas.length-1] : null; }
 function currentEtapaId(){
   const lv = lastVisit();
-  if(lv && lv.primaryEtapaId) return lv.primaryEtapaId;
+  if(lv && lv.primaryEtapaId){
+    const tocada = etapaObj(lv.primaryEtapaId);
+    // Só usa a etapa da última visita se ela ainda estiver aberta — se já
+    // foi concluída (mesmo que por causa dessa mesma visita), avança pra
+    // próxima fase em aberto.
+    if(tocada && tocada.status !== 'Concluído') return lv.primaryEtapaId;
+  }
   const firstOpen = state.etapas.find(e => e.status !== 'Concluído');
-  return firstOpen ? firstOpen.id : state.etapas[0].id;
+  return firstOpen ? firstOpen.id : state.etapas[state.etapas.length-1].id;
 }
 function nextOpenEtapa(){
   const curId = currentEtapaId();
@@ -770,7 +776,9 @@ function renderKPIs(){
   document.getElementById('kpi-etapa-nome').textContent = curEtapa ? curEtapa.nome.split('— ')[1] : '';
 
   const lv = lastVisit();
-  const statusAtual = lv ? lv.status || (curEtapa && curEtapa.status) : (curEtapa ? curEtapa.status : 'Não iniciado');
+  // Prioriza o status atual da etapa em foco (que já reflete a conclusão
+  // automática) em vez do status "congelado" na última visita registrada.
+  const statusAtual = (curEtapa && curEtapa.status) || (lv && lv.status) || 'Não iniciado';
   document.getElementById('kpi-status-badge').innerHTML = badgeHtml(statusAtual);
   document.getElementById('kpi-status-note').textContent = lv ? `última visita em ${fmtDateBR(lv.dataISO)}` : 'nenhuma visita registrada';
 }
@@ -1561,6 +1569,7 @@ window.deleteVisit = function(id){
 };
 
 function renderAll(){
+  aplicarConclusaoAutomatica();
   renderKPIs();
   renderEtapas();
   renderTimeline();
@@ -2153,6 +2162,7 @@ async function boot(){
   renderFormEtapaOptions();
   normalizeVisitas();
   recomputeEtapas();
+  aplicarConclusaoAutomatica();
   document.getElementById('plan-inicio').value = todayISO();
   renderKPIs();
   renderEtapas();
