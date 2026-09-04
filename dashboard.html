@@ -65,17 +65,18 @@ h1{margin:0;font-size:22px;font-weight:800}
 .prazo-item .prazo-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
 .prazo-item .prazo-data{font-size:15px;font-weight:800;margin-bottom:4px}
 .prazo-item .prazo-msg{font-size:12px;line-height:1.3;white-space:pre-line}
+.prazo-item .prazo-destaque{font-size:14px;font-weight:800;margin-top:4px;line-height:1.3}
 .prazo-data-input{font:inherit;font-size:15px;font-weight:800;margin-bottom:4px;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:2px 5px;background:#fff;color:inherit;width:100%}
 .prazo-item .link-btn{margin-top:2px;display:inline-block}
 .prazo-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-top:2px;cursor:pointer}
 .prazo-check input{width:14px;height:14px}
 .prazo-item .prazo-data-input{margin-top:4px}
 .prazo-ok{background:var(--greenbg);border-color:transparent}
-.prazo-ok .prazo-data,.prazo-ok .prazo-msg,.prazo-ok .prazo-data-input{color:var(--green)}
+.prazo-ok .prazo-data,.prazo-ok .prazo-msg,.prazo-ok .prazo-data-input,.prazo-ok .prazo-destaque{color:var(--green)}
 .prazo-atencao{background:var(--amberbg);border-color:transparent}
-.prazo-atencao .prazo-data,.prazo-atencao .prazo-msg,.prazo-atencao .prazo-data-input{color:var(--amber)}
+.prazo-atencao .prazo-data,.prazo-atencao .prazo-msg,.prazo-atencao .prazo-data-input,.prazo-atencao .prazo-destaque{color:var(--amber)}
 .prazo-vencido{background:#fde2e1;border-color:transparent}
-.prazo-vencido .prazo-data,.prazo-vencido .prazo-msg,.prazo-vencido .prazo-data-input{color:var(--danger)}
+.prazo-vencido .prazo-data,.prazo-vencido .prazo-msg,.prazo-vencido .prazo-data-input,.prazo-vencido .prazo-destaque{color:var(--danger)}
 .kpi small{display:block;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
 .kpi strong{font-size:24px;color:var(--navy);font-variant-numeric:tabular-nums}
 .kpi .note{font-size:11px;color:var(--muted);margin-top:5px}
@@ -1785,12 +1786,14 @@ function computePrazosBP(){
   // horas, não da contratação. Enquanto não há 1ª visita registrada, usamos
   // a contratação só como estimativa provisória (o rótulo deixa isso claro).
   const baseadoEmContratacao = !primeiraVisita;
-  const prazoEducacional = addDaysISO(primeiraVisita || contratacao, PRAZO_EDUCACIONAL_DIAS);
+  // Ações educacionais já pode contar a partir da 1ª visita planejada (mais
+  // precisa que a contratação), mesmo antes dela ser realizada de fato.
+  const prazoEducacional = addDaysISO(primeiraVisita || primeiraPlanejada || contratacao, PRAZO_EDUCACIONAL_DIAS);
   const prazoEncerramentoAuto = addDaysISO(primeiraVisita || contratacao, PRAZO_ENCERRAMENTO_DIAS);
   const encerramentoManual = Boolean(assessoriaRow.prazo_encerramento_manual);
   const prazoEncerramento = assessoriaRow.prazo_encerramento_manual || prazoEncerramentoAuto;
 
-  let apontamentoStatus, apontamentoMsg;
+  let apontamentoStatus, apontamentoMsg, apontamentoDestaque = '';
   if(primeiraVisita && primeiraVisita <= prazoApontamento){
     apontamentoStatus = 'ok';
     apontamentoMsg = `Cumprido — 1ª visita em ${fmtDateBR(primeiraVisita)}`;
@@ -1800,15 +1803,15 @@ function computePrazosBP(){
   } else if(hoje > prazoApontamento){
     apontamentoStatus = 'vencido';
     apontamentoMsg = 'Prazo vencido e ainda não há visita registrada';
-    if(primeiraPlanejada) apontamentoMsg += `\n1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}`;
+    if(primeiraPlanejada) apontamentoDestaque = `1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}`;
   } else {
     const dias = diffDaysISO(hoje, prazoApontamento);
     const planejadaAtrasada = primeiraPlanejada && primeiraPlanejada > prazoApontamento;
     apontamentoStatus = planejadaAtrasada ? 'atencao' : (dias <= 7 ? 'atencao' : 'ok');
     apontamentoMsg = `Faltam ${dias} dia(s) para o 1º apontamento`;
-    apontamentoMsg += primeiraPlanejada
-      ? `\n1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}${planejadaAtrasada ? ' (depois do prazo!)' : ''}`
-      : '\nNenhuma visita planejada ainda';
+    apontamentoDestaque = primeiraPlanejada
+      ? `1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}${planejadaAtrasada ? ' (depois do prazo!)' : ''}`
+      : 'Nenhuma visita planejada ainda';
   }
 
   const educRealizada = Boolean(assessoriaRow.acao_educacional_realizada);
@@ -1827,8 +1830,10 @@ function computePrazosBP(){
       educStatus = diasEduc <= 7 ? 'atencao' : 'ok';
       educMsg = `Faltam ${diasEduc} dia(s) para avisar o especialista educacional`;
     }
-    if(baseadoEmContratacao){
-      educMsg += ' (estimativa pela contratação — recalcula quando a 1ª visita for registrada)';
+    if(!primeiraVisita){
+      educMsg += primeiraPlanejada
+        ? ' (baseado na 1ª visita planejada — recalcula quando ela for registrada)'
+        : ' (estimativa pela contratação — recalcula quando a 1ª visita for planejada ou registrada)';
     }
   }
 
@@ -1859,7 +1864,7 @@ function computePrazosBP(){
   }
 
   return [
-    { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg },
+    { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg, destaque: apontamentoDestaque },
     {
       label: 'Ações educacionais (30 dias)', prazo: prazoEducacional,
       status: educStatus, msg: educMsg, realizavel: true,
@@ -1901,6 +1906,7 @@ function renderPrazosBP(){
       <div class="prazo-label">${escapeHtml(p.label)}</div>
       <div class="prazo-data">${fmtDateBR(p.prazo)}</div>
       <div class="prazo-msg">${escapeHtml(p.msg)}</div>
+      ${p.destaque ? `<div class="prazo-destaque">${escapeHtml(p.destaque)}</div>` : ''}
     </div>`;
   const [apontamento, educacional, encerramento] = prazos;
   grid.innerHTML = itemHtml(apontamento) + `
