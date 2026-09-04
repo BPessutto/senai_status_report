@@ -19,6 +19,8 @@ create table if not exists public.assessorias (
   porte text not null default 'DEMAIS' check (porte in ('ME','EPP','DEMAIS')),
   data_contratacao date,
   prazo_encerramento_manual date,
+  acao_educacional_realizada boolean not null default false,
+  acao_educacional_data date,
   data jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

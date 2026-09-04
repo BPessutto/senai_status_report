@@ -67,6 +67,9 @@ h1{margin:0;font-size:22px;font-weight:800}
 .prazo-item .prazo-msg{font-size:12px;line-height:1.4}
 .prazo-data-input{font:inherit;font-size:15px;font-weight:800;margin-bottom:4px;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:2px 5px;background:#fff;color:inherit;width:100%}
 .prazo-item .link-btn{margin-top:2px;display:inline-block}
+.prazo-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-top:6px;cursor:pointer}
+.prazo-check input{width:14px;height:14px}
+.prazo-item .prazo-data-input{margin-top:4px}
 .prazo-ok{background:var(--greenbg);border-color:transparent}
 .prazo-ok .prazo-data,.prazo-ok .prazo-msg,.prazo-ok .prazo-data-input{color:var(--green)}
 .prazo-atencao{background:var(--amberbg);border-color:transparent}
@@ -1718,15 +1721,15 @@ function computePrazosBP(){
   if(!contratacao) return null;
   const hoje = todayISO();
   const prazoApontamento = addDaysISO(contratacao, PRAZO_APONTAMENTO_DIAS);
-  const prazoEducacional = addDaysISO(contratacao, PRAZO_EDUCACIONAL_DIAS);
 
   const visitasRealizadas = (state.visitas || []).map(v => v.dataISO).sort();
   const primeiraVisita = visitasRealizadas[0] || null;
 
-  // As 16 semanas contam a partir do 1º apontamento de horas, não da
-  // contratação. Enquanto não há 1ª visita registrada, usamos a contratação
-  // só como estimativa provisória (o rótulo deixa isso claro).
-  const encerramentoBaseadoEmContratacao = !primeiraVisita;
+  // Ações educacionais e encerramento contam a partir do 1º apontamento de
+  // horas, não da contratação. Enquanto não há 1ª visita registrada, usamos
+  // a contratação só como estimativa provisória (o rótulo deixa isso claro).
+  const baseadoEmContratacao = !primeiraVisita;
+  const prazoEducacional = addDaysISO(primeiraVisita || contratacao, PRAZO_EDUCACIONAL_DIAS);
   const prazoEncerramentoAuto = addDaysISO(primeiraVisita || contratacao, PRAZO_ENCERRAMENTO_DIAS);
   const encerramentoManual = Boolean(assessoriaRow.prazo_encerramento_manual);
   const prazoEncerramento = assessoriaRow.prazo_encerramento_manual || prazoEncerramentoAuto;
@@ -1747,14 +1750,25 @@ function computePrazosBP(){
     apontamentoMsg = `Faltam ${dias} dia(s) para o 1º apontamento`;
   }
 
-  const diasEduc = diffDaysISO(hoje, prazoEducacional);
+  const educRealizada = Boolean(assessoriaRow.acao_educacional_realizada);
   let educStatus, educMsg;
-  if(diasEduc < 0){
-    educStatus = 'atencao';
-    educMsg = 'Prazo passou — confirme se o especialista educacional já foi avisado';
+  if(educRealizada){
+    educStatus = 'ok';
+    educMsg = assessoriaRow.acao_educacional_data
+      ? `Realizado em ${fmtDateBR(assessoriaRow.acao_educacional_data)}`
+      : 'Realizado';
   } else {
-    educStatus = diasEduc <= 7 ? 'atencao' : 'ok';
-    educMsg = `Faltam ${diasEduc} dia(s) para avisar o especialista educacional`;
+    const diasEduc = diffDaysISO(hoje, prazoEducacional);
+    if(diasEduc < 0){
+      educStatus = 'atencao';
+      educMsg = 'Prazo passou — confirme se o especialista educacional já foi avisado';
+    } else {
+      educStatus = diasEduc <= 7 ? 'atencao' : 'ok';
+      educMsg = `Faltam ${diasEduc} dia(s) para avisar o especialista educacional`;
+    }
+    if(baseadoEmContratacao){
+      educMsg += ' (estimativa pela contratação — recalcula quando a 1ª visita for registrada)';
+    }
   }
 
   const todasDatas = [
@@ -1779,13 +1793,17 @@ function computePrazosBP(){
     encerramentoStatus = dias <= 14 ? 'atencao' : 'ok';
     encerramentoMsg = `Faltam ${dias} dia(s) para o encerramento`;
   }
-  if(!encerramentoManual && encerramentoBaseadoEmContratacao){
+  if(!encerramentoManual && baseadoEmContratacao){
     encerramentoMsg += ' (estimativa pela contratação — recalcula quando a 1ª visita for registrada)';
   }
 
   return [
     { label: '1º apontamento de horas (60 dias)', prazo: prazoApontamento, status: apontamentoStatus, msg: apontamentoMsg },
-    { label: 'Ações educacionais (30 dias)', prazo: prazoEducacional, status: educStatus, msg: educMsg },
+    {
+      label: 'Ações educacionais (30 dias do 1º apontamento)', prazo: prazoEducacional,
+      status: educStatus, msg: educMsg, realizavel: true,
+      realizado: educRealizada, dataRealizado: assessoriaRow.acao_educacional_data
+    },
     {
       label: encerramentoManual ? 'Encerramento da assessoria (definido pela sede)' : 'Encerramento da assessoria (16 semanas do 1º apontamento)',
       prazo: prazoEncerramento, auto: prazoEncerramentoAuto, manual: encerramentoManual,
@@ -1824,7 +1842,14 @@ function renderPrazosBP(){
       <div class="prazo-msg">${escapeHtml(p.msg)}</div>
     </div>`;
   const [apontamento, educacional, encerramento] = prazos;
-  grid.innerHTML = itemHtml(apontamento) + itemHtml(educacional) + `
+  grid.innerHTML = itemHtml(apontamento) + `
+    <div class="prazo-item prazo-${educacional.status}">
+      <div class="prazo-label">${escapeHtml(educacional.label)}</div>
+      <div class="prazo-data">${fmtDateBR(educacional.prazo)}</div>
+      <div class="prazo-msg">${escapeHtml(educacional.msg)}</div>
+      <label class="prazo-check"><input type="checkbox" id="field-educacional-realizada" ${educacional.realizado ? 'checked' : ''} ${isOwner ? '' : 'disabled'}> Realizado — registrar pra referência</label>
+      <input type="date" class="prazo-data-input" id="field-educacional-data" value="${educacional.dataRealizado || ''}" ${(!isOwner || !educacional.realizado) ? 'disabled' : ''}>
+    </div>` + `
     <div class="prazo-item prazo-${encerramento.status}">
       <div class="prazo-label">${escapeHtml(encerramento.label)}</div>
       <input type="date" class="prazo-data-input" id="field-prazo-encerramento" value="${encerramento.prazo}" ${isOwner ? '' : 'disabled'}>
@@ -1837,7 +1862,31 @@ function renderPrazosBP(){
     });
     const btnLimpar = document.getElementById('btn-limpar-prazo-encerramento');
     if(btnLimpar) btnLimpar.addEventListener('click', () => savePrazoEncerramentoManual(null));
+
+    document.getElementById('field-educacional-realizada').addEventListener('change', function(){
+      saveAcaoEducacional(this.checked, this.checked ? (document.getElementById('field-educacional-data').value || todayISO()) : null);
+    });
+    document.getElementById('field-educacional-data').addEventListener('change', function(){
+      saveAcaoEducacional(true, this.value || null);
+    });
   }
+}
+
+async function saveAcaoEducacional(realizada, data){
+  if(!isOwner) return;
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ acao_educacional_realizada: realizada, acao_educacional_data: data })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
+  if(error){
+    alert('Não foi possível salvar essa alteração: ' + error.message);
+    return;
+  }
+  assessoriaRow.acao_educacional_realizada = realizada;
+  assessoriaRow.acao_educacional_data = data;
+  assessoriaRow.updated_at = updated.updated_at;
+  renderPrazosBP();
 }
 
 document.getElementById('field-contratacao').addEventListener('change', async function(){
