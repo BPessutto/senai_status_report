@@ -1779,6 +1779,7 @@ function computePrazosBP(){
 
   const visitasRealizadas = (state.visitas || []).map(v => v.dataISO).sort();
   const primeiraVisita = visitasRealizadas[0] || null;
+  const primeiraPlanejada = (state.visitasPlanejadas || []).map(p => p.dataISO).sort()[0] || null;
 
   // Ações educacionais e encerramento contam a partir do 1º apontamento de
   // horas, não da contratação. Enquanto não há 1ª visita registrada, usamos
@@ -1799,10 +1800,15 @@ function computePrazosBP(){
   } else if(hoje > prazoApontamento){
     apontamentoStatus = 'vencido';
     apontamentoMsg = 'Prazo vencido e ainda não há visita registrada';
+    if(primeiraPlanejada) apontamentoMsg += ` — 1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}`;
   } else {
     const dias = diffDaysISO(hoje, prazoApontamento);
-    apontamentoStatus = dias <= 7 ? 'atencao' : 'ok';
+    const planejadaAtrasada = primeiraPlanejada && primeiraPlanejada > prazoApontamento;
+    apontamentoStatus = planejadaAtrasada ? 'atencao' : (dias <= 7 ? 'atencao' : 'ok');
     apontamentoMsg = `Faltam ${dias} dia(s) para o 1º apontamento`;
+    apontamentoMsg += primeiraPlanejada
+      ? ` — 1ª visita planejada para ${fmtDateBR(primeiraPlanejada)}${planejadaAtrasada ? ' (depois do prazo!)' : ''}`
+      : ' — nenhuma visita planejada ainda';
   }
 
   const educRealizada = Boolean(assessoriaRow.acao_educacional_realizada);
