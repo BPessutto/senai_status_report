@@ -1465,8 +1465,15 @@ function gerarDatasPlanejadas(){
   const deslocamentoInput = Number(document.getElementById('plan-deslocamento').value);
   const deslocamentoPorVisita = Number.isFinite(deslocamentoInput) && deslocamentoInput > 0 ? Math.min(2, deslocamentoInput) : 0;
   const { totalReal } = computeTotals();
-  const horasRestantes = Math.max(0, state.totalPrevisto - totalReal);
-  if(horasRestantes <= 0){ alert('Este projeto já atingiu a carga horária prevista — não há mais horas a planejar.'); return; }
+  // Desconta também o que já está planejado (manual ou gerado antes) e ainda
+  // não foi realizado — senão o gerador soma como se nada tivesse sido
+  // planejado ainda e passa da carga horária.
+  const realizadasSet = new Set(state.visitas.map(v => v.dataISO));
+  const jaPlanejado = state.visitasPlanejadas
+    .filter(p => !realizadasSet.has(p.dataISO))
+    .reduce((s,p) => s + Number(p.horas||0), 0);
+  const horasRestantes = Math.max(0, state.totalPrevisto - totalReal - jaPlanejado);
+  if(horasRestantes <= 0){ alert('O planejamento atual já cobre (ou passa) a carga horária prevista — não há mais horas a gerar.'); return; }
 
   const existentes = new Set([
     ...state.visitasPlanejadas.map(p => p.dataISO),
