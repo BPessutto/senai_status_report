@@ -260,7 +260,9 @@
     const arquivadas = data.filter(r => r.ativo === false);
 
     const btnArquivadas = document.getElementById('btn-ver-arquivadas');
-    btnArquivadas.classList.toggle('hidden', !isOwnerOfSomething || !arquivadas.length);
+    // Se já está vendo as arquivadas, o botão fica visível mesmo com 0 itens
+    // (senão não teria como voltar pra tela principal).
+    btnArquivadas.classList.toggle('hidden', !isOwnerOfSomething || (!mostrarArquivadas && !arquivadas.length));
     btnArquivadas.textContent = mostrarArquivadas ? '‹ Ver ativas' : `Ver arquivadas (${arquivadas.length})`;
 
     const listaAtual = mostrarArquivadas ? arquivadas : ativas;
