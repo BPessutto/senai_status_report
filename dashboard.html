@@ -1325,16 +1325,36 @@ function toggleSelectionMode(){
   renderPlanejamento();
 }
 
-function bulkSetHours(){
+async function bulkSetHours(){
   if(!isOwner || !selectedDates.size) return;
-  const answer = prompt(`Definir quantas horas para os ${selectedDates.size} dia(s) selecionado(s):`, '8');
-  if(answer === null) return;
-  const horas = Number(String(answer).trim().replace(',','.'));
+  const result = await showActionPanel({
+    title: 'Definir horas em lote',
+    subtitle: `${selectedDates.size} dia(s) selecionado(s)`,
+    fields: [
+      { id:'horas', label:'Quantas horas por visita?', type:'number', value:'8' },
+      { id:'deslocamento', label:'Deslocamento previsto (opcional, até 2h) — deixe em branco pra não alterar', type:'number', placeholder:'0' }
+    ],
+    actions: [
+      { label:'Aplicar', style:'primary', value:'ok' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
+    ]
+  });
+  if(!result || result.action !== 'ok') return;
+  const horas = Number(String(result.values.horas).trim().replace(',','.'));
   if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
+  const deslocamentoRaw = String(result.values.deslocamento || '').trim();
+  const alterarDeslocamento = deslocamentoRaw !== '';
+  const deslocamentoInput = Number(deslocamentoRaw.replace(',','.'));
+  const deslocamentoHoras = Number.isFinite(deslocamentoInput) && deslocamentoInput > 0 ? Math.min(2, deslocamentoInput) : undefined;
+
   selectedDates.forEach(iso => {
     const existing = state.visitasPlanejadas.find(p => p.dataISO === iso);
-    if(existing) existing.horas = horas;
-    else state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas });
+    if(existing){
+      existing.horas = horas;
+      if(alterarDeslocamento) existing.deslocamentoHoras = deslocamentoHoras;
+    } else {
+      state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas, deslocamentoHoras: alterarDeslocamento ? deslocamentoHoras : undefined });
+    }
   });
   state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
   selectedDates.clear();
