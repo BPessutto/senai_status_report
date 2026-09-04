@@ -1103,9 +1103,9 @@ function otherAssessoriaBusyInfo(iso){
   for(const a of outrasAssessorias){
     const d = a.data || {};
     const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-    if(actual > 0) return { nome: a.nome, municipio: a.municipio, horas: actual, totalPrevisto: d.totalPrevisto };
+    if(actual > 0) return { nome: a.nome, clienteNome: a.cliente_nome, municipio: a.municipio, horas: actual, totalPrevisto: d.totalPrevisto };
     const planned = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
-    if(planned) return { nome: a.nome, municipio: a.municipio, horas: planned.horas, totalPrevisto: d.totalPrevisto };
+    if(planned) return { nome: a.nome, clienteNome: a.cliente_nome, municipio: a.municipio, horas: planned.horas, totalPrevisto: d.totalPrevisto };
   }
   return null;
 }
@@ -1159,6 +1159,7 @@ function renderMonthCard(year, month){
       : busy
         ? [
             `Título/Assessoria: ${busy.nome}`,
+            `Empresa: ${busy.clienteNome || '—'}`,
             `Local/Município: ${busy.municipio || '—'}`,
             `Horas Totais: ${busy.totalPrevisto || 0}h`,
             `Horário: 08h00 - 17h00`,
@@ -2245,7 +2246,7 @@ async function boot(){
   if(isOwner){
     // Sempre em relação ao dono real da assessoria (não a quem está logado),
     // pra funcionar certo tanto pro consultor quanto pro gestor acompanhando.
-    const { data: outras } = await sb.from('assessorias').select('id,nome,municipio,data').eq('owner_id', data.owner_id).neq('id', assessoriaId);
+    const { data: outras } = await sb.from('assessorias').select('id,nome,cliente_nome,municipio,data').eq('owner_id', data.owner_id).neq('id', assessoriaId);
     outrasAssessorias = outras || [];
     const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', data.owner_id);
     compensacoes = comp || [];

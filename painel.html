@@ -416,6 +416,7 @@
         const totalPrevisto = (info.assessoria.data && info.assessoria.data.totalPrevisto) || 0;
         title = [
           `Título/Assessoria: ${info.assessoria.nome}`,
+          `Empresa: ${info.assessoria.cliente_nome || '—'}`,
           `Local/Município: ${info.assessoria.municipio || '—'}`,
           `Horas Totais: ${totalPrevisto}h`,
           `Horário: 08h00 - 17h00`,
