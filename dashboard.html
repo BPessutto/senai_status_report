@@ -514,7 +514,8 @@ h1{margin:0;font-size:22px;font-weight:800}
     <div id="plan-bulk-bar" class="plan-bulk-bar hidden">
       <span id="plan-bulk-count">0 dia(s) selecionado(s)</span>
       <button type="button" class="btn btn-xs" id="btn-bulk-horas">Definir horas</button>
-      <button type="button" class="btn btn-xs btn-danger" id="btn-bulk-excluir">Excluir planejamento</button>
+      <button type="button" class="btn btn-xs" id="btn-bulk-dia-semana">Mudar dia da semana</button>
+      <button type="button" class="btn btn-xs btn-danger" id="btn-bulk-excluir">Excluir selecionados</button>
       <button type="button" class="btn btn-xs" id="btn-bulk-cancelar">Cancelar seleção</button>
     </div>
     <div class="plan-nav">
@@ -1316,13 +1317,62 @@ function bulkSetHours(){
 
 function bulkDelete(){
   if(!isOwner || !selectedDates.size) return;
-  if(!confirm(`Remover o planejamento dos ${selectedDates.size} dia(s) selecionado(s)?`)) return;
+  if(!confirm(`Remover o planejamento dos ${selectedDates.size} dia(s) selecionado(s)? As demais datas planejadas não são afetadas.`)) return;
   state.visitasPlanejadas = state.visitasPlanejadas.filter(p => !selectedDates.has(p.dataISO));
   selectedDates.clear();
   selectionMode = false;
   document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
   renderPlanejamento();
   saveState();
+}
+
+// Move cada data selecionada pro mesmo dia da semana escolhido, dentro da
+// semana em que ela já está (ex.: todas as quartas selecionadas viram terças
+// da mesma semana). Reaproveita planningBlockReason pra não sobrescrever
+// visita já registrada, outro planejamento, compensação ou feriado.
+async function bulkMudarDiaSemana(){
+  if(!isOwner || !selectedDates.size) return;
+  const escolha = await showActionPanel({
+    title: 'Mudar dia da semana',
+    subtitle: `${selectedDates.size} dia(s) selecionado(s). Cada um vai para o mesmo dia da semana escolhido, dentro da semana em que já está.`,
+    actions: [
+      { label:'Segunda', style:'primary', value:'1' },
+      { label:'Terça', style:'primary', value:'2' },
+      { label:'Quarta', style:'primary', value:'3' },
+      { label:'Quinta', style:'primary', value:'4' },
+      { label:'Sexta', style:'primary', value:'5' },
+      { label:'Sábado', style:'primary', value:'6' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
+    ]
+  });
+  if(!escolha || escolha.action === 'cancel') return;
+  const alvo = Number(escolha.action);
+
+  const selecionados = Array.from(selectedDates).sort();
+  let movidos = 0, jaNoLugar = 0;
+  const bloqueados = [];
+  selecionados.forEach(iso => {
+    const entrada = state.visitasPlanejadas.find(p => p.dataISO === iso);
+    if(!entrada) return;
+    const atual = new Date(iso + 'T00:00:00').getDay();
+    if(atual === alvo){ jaNoLugar++; return; }
+    const novoISO = addDaysISO(iso, alvo - atual);
+    const motivo = planningBlockReason(novoISO);
+    if(motivo){ bloqueados.push(`${fmtDateBR(iso)} → ${fmtDateBR(novoISO)}: ${motivo}`); return; }
+    entrada.dataISO = novoISO;
+    movidos++;
+  });
+  state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+  selectedDates.clear();
+  selectionMode = false;
+  document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
+  renderPlanejamento();
+  if(movidos) saveState();
+
+  let msg = `${movidos} data(s) movida(s).`;
+  if(jaNoLugar) msg += ` ${jaNoLugar} já estava(m) no dia certo.`;
+  if(bloqueados.length) msg += `\n\nNão foi possível mover:\n${bloqueados.join('\n')}`;
+  await showActionPanel({ title: 'Resultado', subtitle: msg, actions: [{ label:'Entendi', style:'ghost' }] });
 }
 
 function cancelSelection(){
@@ -1920,6 +1970,7 @@ document.getElementById('btn-gerar-datas').addEventListener('click', gerarDatasP
 document.getElementById('btn-limpar-plan').addEventListener('click', limparPlanejamento);
 document.getElementById('btn-selecionar-multiplos').addEventListener('click', toggleSelectionMode);
 document.getElementById('btn-bulk-horas').addEventListener('click', bulkSetHours);
+document.getElementById('btn-bulk-dia-semana').addEventListener('click', bulkMudarDiaSemana);
 document.getElementById('btn-bulk-excluir').addEventListener('click', bulkDelete);
 document.getElementById('btn-bulk-cancelar').addEventListener('click', cancelSelection);
 
