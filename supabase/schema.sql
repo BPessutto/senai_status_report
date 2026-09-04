@@ -36,6 +36,7 @@ create table if not exists public.compensacoes (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   data_iso date not null,
+  horas numeric not null default 8,
   motivo text,
   created_at timestamptz not null default now(),
   unique (owner_id, data_iso)

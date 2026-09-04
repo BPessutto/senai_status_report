@@ -39,6 +39,12 @@
   .cal-arquivada{background:#e2e8f0;color:#64748b;cursor:pointer;font-weight:700}
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
+  .banco-linha{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .banco-saldo{font-size:13.5px;font-weight:800;padding:8px 12px;border-radius:var(--radius-sm);display:inline-block}
+  .banco-ok{background:var(--greenbg);color:var(--green)}
+  .banco-atencao{background:var(--amberbg);color:var(--amber)}
+  .banco-vencido{background:#fde2e1;color:var(--danger)}
+  .banco-aviso{font-size:12px;color:var(--danger);font-weight:700;margin-top:6px}
 </style>
 </head>
 <body>
@@ -77,6 +83,11 @@
     </div>
     <div id="calendario-legenda" class="cal-legenda-consolidado"></div>
     <div id="calendario-meses" class="cal-meses-grid"></div>
+  </div>
+
+  <div class="card hidden" id="banco-horas-card">
+    <div class="card-title">Banco de horas de deslocamento</div>
+    <div id="banco-horas-body"></div>
   </div>
 </div>
 
@@ -295,9 +306,58 @@
       const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', effectiveUserId);
       feriadosMunicipaisList = feriados || [];
       renderCalendario();
+      renderBancoDeHoras();
     } else {
       calendarioCard.classList.add('hidden');
+      document.getElementById('banco-horas-card').classList.add('hidden');
     }
+  }
+
+  // ============================================================
+  // Banco de horas de deslocamento
+  // ============================================================
+  function computeBancoDeHoras(){
+    const todasAssessorias = [...ownedAssessoriasSorted, ...arquivadasParaCalendario];
+    const hoje = todayISO();
+    const mesAtual = hoje.slice(0, 7);
+
+    let geradoTotal = 0, geradoMes = 0;
+    todasAssessorias.forEach(a => {
+      ((a.data && a.data.visitas) || []).forEach(v => {
+        const h = Number(v.deslocamentoHoras || 0);
+        if (h > 0) {
+          geradoTotal += h;
+          if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) geradoMes += h;
+        }
+      });
+    });
+
+    let compensadoTotal = 0, compensadoMes = 0;
+    compensacoesList.forEach(c => {
+      const h = Number(c.horas || 8);
+      compensadoTotal += h;
+      if (c.data_iso && c.data_iso.slice(0, 7) === mesAtual) compensadoMes += h;
+    });
+
+    const saldoTotal = Math.max(0, geradoTotal - compensadoTotal);
+    const saldoMes = geradoMes - compensadoMes;
+    const saldoAnterior = Math.max(0, saldoTotal - Math.max(0, saldoMes));
+
+    return { geradoMes, compensadoMes, saldoTotal, saldoAnterior, mesAtual };
+  }
+
+  function renderBancoDeHoras(){
+    const card = document.getElementById('banco-horas-card');
+    card.classList.remove('hidden');
+    const b = computeBancoDeHoras();
+    const [ano, mes] = b.mesAtual.split('-');
+    const nomeMes = MONTH_NAMES[Number(mes) - 1];
+    const statusClass = b.saldoTotal <= 0 ? 'banco-ok' : (b.saldoAnterior > 0 ? 'banco-vencido' : 'banco-atencao');
+    document.getElementById('banco-horas-body').innerHTML = `
+      <div class="banco-linha">${nomeMes}/${ano}: gerado ${b.geradoMes}h de deslocamento · compensado ${b.compensadoMes}h</div>
+      <div class="banco-saldo ${statusClass}">Saldo do banco de horas: ${b.saldoTotal}h${b.saldoTotal > 0 ? ' a compensar' : ''}</div>
+      ${b.saldoAnterior > 0 ? `<div class="banco-aviso">⚠ ${b.saldoAnterior}h desse saldo vêm de meses anteriores — regularize o quanto antes.</div>` : ''}
+    `;
   }
 
   // ============================================================
@@ -372,7 +432,7 @@
         ].join('\n');
       } else if (comp) {
         cls += ' cal-compensacao';
-        title = `Compensação${comp.motivo ? ': ' + comp.motivo : ''}`;
+        title = `Compensação (${comp.horas || 8}h)${comp.motivo ? ': ' + comp.motivo : ''}`;
       } else if (feriado) {
         cls += ' cal-feriado';
         title = `Feriado ${feriado.tipo}: ${feriado.nome}`;
@@ -450,7 +510,7 @@
     if (comp) {
       const confirmado = await showActionPanel({
         title: 'Remover compensação?',
-        subtitle: `${fmtDateBR(iso)}${comp.motivo ? ' — ' + comp.motivo : ''}`,
+        subtitle: `${fmtDateBR(iso)} · ${comp.horas || 8}h${comp.motivo ? ' — ' + comp.motivo : ''}`,
         actions: [
           { label:'Remover', style:'danger', value:'sim' },
           { label:'Cancelar', style:'ghost', value:'nao' }
@@ -460,6 +520,7 @@
         await sb.from('compensacoes').delete().eq('id', comp.id);
         compensacoesList = compensacoesList.filter(c => c.id !== comp.id);
         renderCalendario();
+        renderBancoDeHoras();
       }
       return;
     }
@@ -517,21 +578,28 @@
       const result = await showActionPanel({
         title: 'Marcar compensação',
         subtitle: fmtDateBR(iso),
-        fields: [{ id:'motivo', label:'Motivo (opcional)', type:'text', placeholder:'Ex.: banco de horas' }],
+        fields: [
+          { id:'horas', label:'Quantas horas compensa nesse dia?', type:'number', value:'8' },
+          { id:'motivo', label:'Motivo (opcional)', type:'text', placeholder:'Ex.: deslocamento acumulado' }
+        ],
         actions: [
           { label:'Marcar compensação', style:'primary', value:'ok' },
           { label:'Cancelar', style:'ghost', value:'cancel' }
         ]
       });
       if (!result || result.action !== 'ok') return;
+      const horas = Number(String(result.values.horas).trim().replace(',','.'));
+      if (!Number.isFinite(horas) || horas <= 0) { alert('Informe um número de horas válido.'); return; }
       const { data: novaComp, error } = await sb.from('compensacoes').insert({
         owner_id: effectiveUserId,
         data_iso: iso,
+        horas,
         motivo: result.values.motivo.trim() || null
       }).select().single();
       if (error) { alert('Não foi possível marcar a compensação: ' + error.message); return; }
       compensacoesList.push(novaComp);
       renderCalendario();
+      renderBancoDeHoras();
       return;
     }
 
