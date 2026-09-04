@@ -684,11 +684,7 @@
   document.getElementById('btn-ano-seguinte').addEventListener('click', () => { calendarYear++; renderCalendario(); });
 
   document.getElementById('btn-banco-horas').addEventListener('click', () => {
-    showActionPanel({
-      title: 'Banco de Horas Para Compensação',
-      note: bancoDeHorasNoteHtml(),
-      actions: [{ label:'Fechar', style:'ghost' }]
-    });
+    onCalendarioClick(todayISO());
   });
 
   document.getElementById('btn-ver-arquivadas').addEventListener('click', () => {
