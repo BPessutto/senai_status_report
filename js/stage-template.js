@@ -69,6 +69,54 @@ export function applyPorteHours(data, porte) {
   };
 }
 
+// Prazos do B+P (regra de negócio), contados a partir do 1º apontamento de
+// horas. Compartilhado entre o painel da assessoria e o painel gerencial.
+export const PRAZO_APONTAMENTO_DIAS = 60;
+export const PRAZO_ENCERRAMENTO_DIAS = 115; // 16 semanas (115 dias corridos)
+
+// Percorre as visitas planejadas (ainda não realizadas) em ordem cronológica e vai
+// "consumindo" as horas restantes de cada fase, na ordem das fases. Isso da, ao mesmo
+// tempo: (a) uma previsão aproximada de quando cada fase deve terminar, e (b) qual fase
+// cada visita planejada tende a avançar - sem precisar que o consultor marque a fase na
+// hora de planejar.
+export function computeFasePrevisoes(state){
+  const realizadas = new Set(state.visitas.map(v => v.dataISO));
+  const pendentes = state.visitasPlanejadas
+    .filter(p => !realizadas.has(p.dataISO))
+    .sort((a,b) => a.dataISO.localeCompare(b.dataISO));
+
+  const porFase = [];
+  const tagPorData = {};
+  let idx = 0;
+  let usadoNaEntradaAtual = 0;
+
+  for (const etapa of state.etapas) {
+    let faltam = Math.max(0, Math.round((etapa.prev - etapa.real) * 100) / 100);
+    if (faltam <= 0) {
+      porFase.push({ etapaId: etapa.id, status: 'concluida', dataPrevista: null });
+      continue;
+    }
+    let dataPrevista = null;
+    while (faltam > 0 && idx < pendentes.length) {
+      const entrada = pendentes[idx];
+      if (tagPorData[entrada.dataISO] === undefined) tagPorData[entrada.dataISO] = etapa.id;
+      const disponivel = Number(entrada.horas) - usadoNaEntradaAtual;
+      if (disponivel <= faltam + 0.001) {
+        faltam = Math.round((faltam - disponivel) * 100) / 100;
+        usadoNaEntradaAtual = 0;
+        dataPrevista = entrada.dataISO;
+        idx++;
+      } else {
+        usadoNaEntradaAtual += faltam;
+        dataPrevista = entrada.dataISO;
+        faltam = 0;
+      }
+    }
+    porFase.push({ etapaId: etapa.id, status: faltam > 0 ? 'insuficiente' : 'estimada', dataPrevista });
+  }
+  return { porFase, tagPorData };
+}
+
 export function defaultState(porte = 'DEMAIS') {
   const etapas = STAGE_DEFINITIONS.map(def => ({
     id: def.id,

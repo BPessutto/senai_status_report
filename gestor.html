@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="js/shared.css">
 <style>
   .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px}
   .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
   .consultor-card:hover{filter:brightness(.98)}
   .consultor-card h3{margin:0;font-size:15px;color:var(--navy)}
@@ -22,8 +22,17 @@
   .status-compensando i{background:#6d28d9}
   .status-livre{background:#eef1f5;color:var(--muted)}
   .status-livre i{background:var(--muted)}
-  .consultor-detalhe{font-size:12px;color:var(--muted)}
   .consultor-count{font-size:11px;color:var(--muted)}
+  .metric-block{border-top:1px solid var(--border);padding-top:8px}
+  .metric-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px}
+  .metric-row{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--text);margin-bottom:2px}
+  .metric-row span{color:var(--muted)}
+  .ocup-alta{color:var(--danger);font-weight:800}
+  .ocup-ok{color:var(--green);font-weight:800}
+  .ocup-baixa{color:var(--amber);font-weight:800}
+  .saldo-devedor{color:var(--danger);font-weight:800}
+  .consultor-alertas{border-top:1px solid var(--border);padding-top:8px}
+  .alerta-item{font-size:11px;color:var(--danger);font-weight:700;margin-bottom:5px;line-height:1.4}
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
 </style>
 </head>
@@ -54,7 +63,10 @@
 <script type="module">
   import { sb } from './js/supabase-client.js';
   import { requireSession, logout } from './js/session.js';
-  import { todayISO } from './js/calendar-utils.js';
+  import { todayISO, fmtDateBR, addDaysISO } from './js/calendar-utils.js';
+  import { computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS } from './js/stage-template.js';
+
+  const OCUPACAO_META_MENSAL = 144; // horas/mês = 100% do indicador de ocupação do BI
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
@@ -65,44 +77,174 @@
     return String(str == null ? '' : str)
       .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+  function round1(x){ return Math.round(Number(x||0) * 10) / 10; }
 
-  // Status do dia de um consultor: olha as assessorias ativas dele em busca de
-  // visita realizada hoje, senão visita planejada hoje, senão compensação hoje.
-  function statusHoje(consultorId, assessorias, compensacoes, hoje){
-    const doConsultor = assessorias.filter(a => a.owner_id === consultorId && a.ativo !== false);
-    for (const a of doConsultor) {
-      const d = a.data || {};
-      const realizada = (d.visitas || []).find(v => v.dataISO === hoje);
-      if (realizada) return { tipo: 'visita', empresa: a.cliente_nome || a.nome, assessoriaCount: doConsultor.length };
-    }
-    for (const a of doConsultor) {
-      const d = a.data || {};
-      const planejada = (d.visitasPlanejadas || []).find(p => p.dataISO === hoje);
-      if (planejada) return { tipo: 'planejado', empresa: a.cliente_nome || a.nome, assessoriaCount: doConsultor.length };
-    }
-    const compensando = compensacoes.find(c => c.owner_id === consultorId && c.data_iso === hoje);
-    if (compensando) return { tipo: 'compensando', empresa: null, assessoriaCount: doConsultor.length };
-    return { tipo: 'livre', empresa: null, assessoriaCount: doConsultor.length };
+  // Segunda-feira da semana que contém "hoje" (ISO), em UTC.
+  function segundaDaSemana(hoje){
+    const [y,m,d] = hoje.split('-').map(Number);
+    const diaSemana = new Date(Date.UTC(y, m-1, d)).getUTCDay(); // 0=dom..6=sáb
+    const voltar = diaSemana === 0 ? 6 : diaSemana - 1;
+    return addDaysISO(hoje, -voltar);
   }
 
   function statusBadgeHtml(status){
-    if (status.tipo === 'visita') return `<span class="status-badge status-visita"><i></i>Em visita — ${escapeHtml(status.empresa)}</span>`;
-    if (status.tipo === 'planejado') return `<span class="status-badge status-planejado"><i></i>Planejado — ${escapeHtml(status.empresa)}</span>`;
-    if (status.tipo === 'compensando') return `<span class="status-badge status-compensando"><i></i>Compensando hoje</span>`;
+    if (status.tipo === 'visita') return `<span class="status-badge status-visita"><i></i>Em visita — ${escapeHtml(status.empresa)} (${status.horas}h)</span>`;
+    if (status.tipo === 'planejado') return `<span class="status-badge status-planejado"><i></i>Planejado — ${escapeHtml(status.empresa)} (${status.horas}h)</span>`;
+    if (status.tipo === 'compensando') return `<span class="status-badge status-compensando"><i></i>Compensando hoje (${status.horas}h)</span>`;
     return `<span class="status-badge status-livre"><i></i>Sem atividade hoje</span>`;
   }
 
-  function renderCard(consultor, status){
+  function ocupacaoClass(pct){
+    if (pct > 100) return 'ocup-alta';
+    if (pct >= 85) return 'ocup-ok';
+    return 'ocup-baixa';
+  }
+
+  function metricRowHtml(label, value, cls){
+    return `<div class="metric-row"><span>${label}</span><strong class="${cls || ''}">${value}</strong></div>`;
+  }
+
+  // Junta tudo que o card de um consultor precisa mostrar: status de hoje,
+  // ocupação do mês (planejada x registrada, meta de 144h), comparação
+  // planejado x registrado (semana e mês), banco de horas de deslocamento e
+  // alertas de prazo (1º apontamento, encerramento, fases furadas).
+  function computeConsultorMetrics(consultorId, todasAssessorias, compensacoesTodas, hoje){
+    const doConsultor = todasAssessorias.filter(a => a.owner_id === consultorId);
+    const ativas = doConsultor.filter(a => a.ativo !== false);
+    const compensacoes = compensacoesTodas.filter(c => c.owner_id === consultorId);
+
+    const mesAtual = hoje.slice(0, 7);
+    const semanaInicio = segundaDaSemana(hoje);
+    const semanaFim = addDaysISO(semanaInicio, 6);
+
+    let hojeInfo = { tipo: 'livre', empresa: null, horas: 0 };
+    for (const a of ativas) {
+      const v = ((a.data && a.data.visitas) || []).find(x => x.dataISO === hoje);
+      if (v) { hojeInfo = { tipo: 'visita', empresa: a.cliente_nome || a.nome, horas: round1(v.horasNoDia) }; break; }
+    }
+    if (hojeInfo.tipo === 'livre') {
+      for (const a of ativas) {
+        const p = ((a.data && a.data.visitasPlanejadas) || []).find(x => x.dataISO === hoje);
+        if (p) { hojeInfo = { tipo: 'planejado', empresa: a.cliente_nome || a.nome, horas: round1(p.horas) }; break; }
+      }
+    }
+    if (hojeInfo.tipo === 'livre') {
+      const comp = compensacoes.find(c => c.data_iso === hoje);
+      if (comp) hojeInfo = { tipo: 'compensando', empresa: null, horas: round1(comp.horas || 8) };
+    }
+
+    let planejadoSemana = 0, registradoSemana = 0, planejadoMes = 0, registradoMes = 0;
+    ativas.forEach(a => {
+      const d = a.data || {};
+      (d.visitasPlanejadas || []).forEach(p => {
+        const h = Number(p.horas || 0);
+        if (p.dataISO >= semanaInicio && p.dataISO <= semanaFim) planejadoSemana += h;
+        if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += h;
+      });
+      (d.visitas || []).forEach(v => {
+        const h = Number(v.horasNoDia || 0);
+        if (v.dataISO >= semanaInicio && v.dataISO <= semanaFim) registradoSemana += h;
+        if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += h;
+      });
+    });
+
+    const ocupacaoPlanejada = round1((planejadoMes / OCUPACAO_META_MENSAL) * 100);
+    const ocupacaoRegistrada = round1((registradoMes / OCUPACAO_META_MENSAL) * 100);
+
+    // Banco de horas de deslocamento: histórico completo (ativas + arquivadas),
+    // mesma lógica do painel do consultor.
+    let deslocGeradoTotal = 0, deslocGeradoMes = 0;
+    doConsultor.forEach(a => {
+      ((a.data && a.data.visitas) || []).forEach(v => {
+        const h = Number(v.deslocamentoHoras || 0);
+        if (h > 0) {
+          deslocGeradoTotal += h;
+          if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) deslocGeradoMes += h;
+        }
+      });
+    });
+    let compensadoTotal = 0, compensadoMes = 0;
+    compensacoes.forEach(c => {
+      const h = Number(c.horas || 8);
+      compensadoTotal += h;
+      if (c.data_iso && c.data_iso.slice(0, 7) === mesAtual) compensadoMes += h;
+    });
+    const saldoBanco = round1(Math.max(0, deslocGeradoTotal - compensadoTotal));
+
+    const alertas = [];
+    ativas.forEach(a => {
+      const d = a.data || {};
+      const nomeEmpresa = a.cliente_nome || a.nome;
+      const primeiraVisita = (d.visitas || []).map(v => v.dataISO).sort()[0] || null;
+
+      if (a.data_contratacao) {
+        const prazoApontamento = addDaysISO(a.data_contratacao, PRAZO_APONTAMENTO_DIAS);
+        if (!primeiraVisita && hoje > prazoApontamento) {
+          alertas.push(`${nomeEmpresa}: 1º apontamento atrasado (prazo era ${fmtDateBR(prazoApontamento)})`);
+        }
+        const prazoEncerramentoAuto = addDaysISO(primeiraVisita || a.data_contratacao, PRAZO_ENCERRAMENTO_DIAS);
+        const prazoEncerramento = a.prazo_encerramento_manual || prazoEncerramentoAuto;
+        const totalReal = (d.etapas || []).reduce((s, e) => s + Number(e.real || 0), 0);
+        const concluido = d.totalPrevisto > 0 && totalReal >= d.totalPrevisto;
+        if (!concluido && hoje > prazoEncerramento) {
+          alertas.push(`${nomeEmpresa}: prazo de encerramento vencido (${fmtDateBR(prazoEncerramento)})`);
+        }
+      }
+
+      if (d.etapas && d.etapas.length) {
+        const safeState = { visitas: d.visitas || [], visitasPlanejadas: d.visitasPlanejadas || [], etapas: d.etapas };
+        const { porFase } = computeFasePrevisoes(safeState);
+        porFase.forEach(p => {
+          if (p.status === 'estimada' && p.dataPrevista && p.dataPrevista < hoje) {
+            const etapa = d.etapas.find(e => e.id === p.etapaId);
+            alertas.push(`${nomeEmpresa}: ${etapa ? etapa.curto : p.etapaId} prevista para ${fmtDateBR(p.dataPrevista)}, ainda não concluída`);
+          }
+        });
+      }
+    });
+
+    return {
+      hoje: hojeInfo,
+      assessoriaCount: ativas.length,
+      planejadoSemana: round1(planejadoSemana), registradoSemana: round1(registradoSemana),
+      planejadoMes: round1(planejadoMes), registradoMes: round1(registradoMes),
+      ocupacaoPlanejada, ocupacaoRegistrada,
+      deslocGeradoMes: round1(deslocGeradoMes), compensadoMes: round1(compensadoMes), saldoBanco,
+      alertas
+    };
+  }
+
+  function renderCard(consultor, m){
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'consultor-card';
+    const alertasHtml = m.alertas.length
+      ? `<div class="consultor-alertas">${m.alertas.map(a => `<div class="alerta-item">⚠ ${escapeHtml(a)}</div>`).join('')}</div>`
+      : '';
     card.innerHTML = `
       <div>
         <h3>${escapeHtml(consultor.nome || consultor.email)}</h3>
         <div class="consultor-email">${escapeHtml(consultor.email || '')}</div>
       </div>
-      ${statusBadgeHtml(status)}
-      <div class="consultor-count">${status.assessoriaCount} assessoria(s) ativa(s)</div>
+      ${statusBadgeHtml(m.hoje)}
+      <div class="consultor-count">${m.assessoriaCount} assessoria(s) ativa(s)</div>
+      <div class="metric-block">
+        <div class="metric-title">Ocupação do mês (meta ${OCUPACAO_META_MENSAL}h)</div>
+        ${metricRowHtml('Planejada', `${m.ocupacaoPlanejada}% (${m.planejadoMes}h)`, ocupacaoClass(m.ocupacaoPlanejada))}
+        ${metricRowHtml('Registrada', `${m.ocupacaoRegistrada}% (${m.registradoMes}h)`, ocupacaoClass(m.ocupacaoRegistrada))}
+      </div>
+      <div class="metric-block">
+        <div class="metric-title">Planejado × Registrado</div>
+        ${metricRowHtml('Semana atual', `${m.planejadoSemana}h × ${m.registradoSemana}h`)}
+        ${metricRowHtml('Mês atual', `${m.planejadoMes}h × ${m.registradoMes}h`)}
+      </div>
+      <div class="metric-block">
+        <div class="metric-title">Banco de horas (deslocamento)</div>
+        ${metricRowHtml('Gerado no mês', `${m.deslocGeradoMes}h`)}
+        ${metricRowHtml('Compensado no mês', `${m.compensadoMes}h`)}
+        ${metricRowHtml('Saldo acumulado', `${m.saldoBanco}h`, m.saldoBanco > 0 ? 'saldo-devedor' : '')}
+      </div>
+      ${alertasHtml}
     `;
     card.addEventListener('click', () => {
       window.location.href = `painel.html?as=${consultor.id}`;
@@ -126,14 +268,15 @@
       return;
     }
 
-    const { data: assessorias } = await sb.from('assessorias').select('owner_id,nome,cliente_nome,ativo,data');
-    const { data: compensacoes } = await sb.from('compensacoes').select('owner_id,data_iso');
+    const { data: assessorias } = await sb.from('assessorias')
+      .select('owner_id,nome,cliente_nome,ativo,data,data_contratacao,prazo_encerramento_manual');
+    const { data: compensacoes } = await sb.from('compensacoes').select('owner_id,data_iso,horas');
     const hoje = todayISO();
 
     grid.innerHTML = '';
     consultores.forEach(consultor => {
-      const status = statusHoje(consultor.id, assessorias || [], compensacoes || [], hoje);
-      grid.appendChild(renderCard(consultor, status));
+      const m = computeConsultorMetrics(consultor.id, assessorias || [], compensacoes || [], hoje);
+      grid.appendChild(renderCard(consultor, m));
     });
   }
 

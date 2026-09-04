@@ -581,7 +581,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 <script type="module">
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
-import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours } from './js/stage-template.js';
+import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap, addDaysISO, diffDaysISO } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
 
@@ -943,48 +943,6 @@ window.removeDeliverable = function(stageId, deliverableId){
   saveState();
 };
 
-// Percorre as visitas planejadas (ainda não realizadas) em ordem cronológica e vai
-// "consumindo" as horas restantes de cada fase, na ordem das fases. Isso da, ao mesmo
-// tempo: (a) uma previsão aproximada de quando cada fase deve terminar, e (b) qual fase
-// cada visita planejada tende a avançar - sem precisar que o consultor marque a fase na
-// hora de planejar.
-function computeFasePrevisoes(){
-  const realizadas = new Set(state.visitas.map(v => v.dataISO));
-  const pendentes = state.visitasPlanejadas
-    .filter(p => !realizadas.has(p.dataISO))
-    .sort((a,b) => a.dataISO.localeCompare(b.dataISO));
-
-  const porFase = [];
-  const tagPorData = {};
-  let idx = 0;
-  let usadoNaEntradaAtual = 0;
-
-  for (const etapa of state.etapas) {
-    let faltam = Math.max(0, Math.round((etapa.prev - etapa.real) * 100) / 100);
-    if (faltam <= 0) {
-      porFase.push({ etapaId: etapa.id, status: 'concluida', dataPrevista: null });
-      continue;
-    }
-    let dataPrevista = null;
-    while (faltam > 0 && idx < pendentes.length) {
-      const entrada = pendentes[idx];
-      if (tagPorData[entrada.dataISO] === undefined) tagPorData[entrada.dataISO] = etapa.id;
-      const disponivel = Number(entrada.horas) - usadoNaEntradaAtual;
-      if (disponivel <= faltam + 0.001) {
-        faltam = Math.round((faltam - disponivel) * 100) / 100;
-        usadoNaEntradaAtual = 0;
-        dataPrevista = entrada.dataISO;
-        idx++;
-      } else {
-        usadoNaEntradaAtual += faltam;
-        dataPrevista = entrada.dataISO;
-        faltam = 0;
-      }
-    }
-    porFase.push({ etapaId: etapa.id, status: faltam > 0 ? 'insuficiente' : 'estimada', dataPrevista });
-  }
-  return { porFase, tagPorData };
-}
 
 function renderTimeline(){
   const track = document.getElementById('timeline-track');
@@ -1005,7 +963,7 @@ function renderTimeline(){
       </div>`;
   }).join('');
   const nextEtapa = nextOpenEtapa();
-  const { porFase, tagPorData } = computeFasePrevisoes();
+  const { porFase, tagPorData } = computeFasePrevisoes(state);
   const realizadas = new Set(state.visitas.map(v => v.dataISO));
   const pendentes = state.visitasPlanejadas
     .filter(p => !realizadas.has(p.dataISO))
@@ -1036,7 +994,7 @@ function renderTimeline(){
 function renderStageBars(porFase){
   const wrap = document.getElementById('stage-bars');
   if(!wrap) return;
-  const previsoes = porFase || computeFasePrevisoes().porFase;
+  const previsoes = porFase || computeFasePrevisoes(state).porFase;
   const previsaoPorId = Object.fromEntries(previsoes.map(p => [p.etapaId, p]));
   wrap.innerHTML = state.etapas.map(e => {
     const pct = e.prev > 0 ? Math.min(1, e.real/e.prev) : 0;
@@ -1730,9 +1688,9 @@ document.getElementById('bp-logo-toggle').addEventListener('change', async funct
 
 // Prazos do B+P (regra de negócio): contados a partir da data de contratação.
 // São só um apoio visual pro consultor — nada aqui bloqueia nenhuma ação.
-const PRAZO_APONTAMENTO_DIAS = 60;
+// PRAZO_APONTAMENTO_DIAS e PRAZO_ENCERRAMENTO_DIAS vêm de stage-template.js
+// (compartilhados com o painel gerencial).
 const PRAZO_EDUCACIONAL_DIAS = 30;
-const PRAZO_ENCERRAMENTO_DIAS = 115; // 16 semanas (115 dias corridos), conforme regra oficial do B+P
 
 function computePrazosBP(){
   const contratacao = assessoriaRow.data_contratacao;
