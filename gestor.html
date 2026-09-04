@@ -7,11 +7,13 @@
 <link rel="stylesheet" href="js/shared.css">
 <style>
   .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px}
-  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+  .grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;display:grid;grid-template-columns:190px 1fr 1fr 190px;gap:22px;align-items:start;cursor:pointer;text-align:left;font-family:inherit;color:inherit;width:100%}
   .consultor-card:hover{filter:brightness(.98)}
   .consultor-card h3{margin:0;font-size:15px;color:var(--navy)}
-  .consultor-card .consultor-email{font-size:11px;color:var(--muted)}
+  .consultor-card .consultor-email{font-size:11px;color:var(--muted);margin-bottom:8px}
+  .consultor-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .consultor-col{border-left:1px solid var(--border);padding-left:22px;min-width:0}
   .status-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;padding:6px 10px;border-radius:var(--radius-pill);width:fit-content}
   .status-badge i{display:inline-block;width:8px;height:8px;border-radius:50%}
   .status-visita{background:var(--greenbg);color:var(--green)}
@@ -23,17 +25,43 @@
   .status-livre{background:#eef1f5;color:var(--muted)}
   .status-livre i{background:var(--muted)}
   .consultor-count{font-size:11px;color:var(--muted)}
-  .metric-block{border-top:1px solid var(--border);padding-top:8px}
-  .metric-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px}
+  .metric-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px}
   .metric-row{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--text);margin-bottom:2px}
   .metric-row span{color:var(--muted)}
   .ocup-alta{color:var(--danger);font-weight:800}
   .ocup-ok{color:var(--green);font-weight:800}
   .ocup-baixa{color:var(--amber);font-weight:800}
   .saldo-devedor{color:var(--danger);font-weight:800}
-  .consultor-alertas{border-top:1px solid var(--border);padding-top:8px}
+  .consultor-alertas{grid-column:1 / -1;border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
   .alerta-item{font-size:11px;color:var(--danger);font-weight:700;margin-bottom:5px;line-height:1.4}
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+  .meter-row{margin-bottom:8px}
+  .meter-row:last-child{margin-bottom:0}
+  .meter-label{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .meter-label strong{color:var(--text);font-weight:800}
+  .meter-track{height:7px;background:#eef1f5;border-radius:999px;overflow:hidden}
+  .meter-fill{height:100%;border-radius:999px}
+  .meter-fill.ocup-alta{background:var(--danger)}
+  .meter-fill.ocup-ok{background:var(--green)}
+  .meter-fill.ocup-baixa{background:var(--amber)}
+  .compare-legend{display:flex;gap:14px;font-size:10px;color:var(--muted);margin-bottom:8px}
+  .compare-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+  .legend-planejado{background:var(--blue)}
+  .legend-registrado{background:var(--green)}
+  .compare-groups{display:flex;gap:18px}
+  .compare-group{flex:1;min-width:0}
+  .compare-group-label{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:5px}
+  .compare-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .compare-bar-row:last-child{margin-bottom:0}
+  .compare-track{flex:1;height:7px;background:#eef1f5;border-radius:999px;overflow:hidden;min-width:0}
+  .compare-fill{height:100%;border-radius:999px}
+  .compare-fill-planejado{background:var(--blue)}
+  .compare-fill-registrado{background:var(--green)}
+  .compare-value{font-size:10.5px;color:var(--text);font-weight:700;width:38px;text-align:right;flex-shrink:0}
+  @media(max-width:860px){
+    .consultor-card{grid-template-columns:1fr}
+    .consultor-col{border-left:none;border-top:1px solid var(--border);padding-left:0;padding-top:10px}
+  }
 </style>
 </head>
 <body>
@@ -102,6 +130,32 @@
 
   function metricRowHtml(label, value, cls){
     return `<div class="metric-row"><span>${label}</span><strong class="${cls || ''}">${value}</strong></div>`;
+  }
+
+  // Barra de progresso até a meta (ex.: ocupação do mês), com cor de status
+  // (verde/âmbar/vermelho) igual ao indicador numérico que ela substitui.
+  function meterRowHtml(label, pct, valueLabel){
+    const cls = ocupacaoClass(pct);
+    const largura = Math.min(100, Math.max(0, pct));
+    return `
+      <div class="meter-row">
+        <div class="meter-label"><span>${label}</span><strong class="${cls}">${valueLabel}</strong></div>
+        <div class="meter-track"><div class="meter-fill ${cls}" style="width:${largura}%"></div></div>
+      </div>`;
+  }
+
+  // Par de barras (Planejado x Registrado) com escala local ao grupo, pra
+  // sempre mostrar as duas barras com um comprimento legível.
+  function comparePairHtml(label, planejado, registrado){
+    const max = Math.max(planejado, registrado, 1);
+    const wP = Math.min(100, round1((planejado / max) * 100));
+    const wR = Math.min(100, round1((registrado / max) * 100));
+    return `
+      <div class="compare-group">
+        <div class="compare-group-label">${label}</div>
+        <div class="compare-bar-row"><div class="compare-track"><div class="compare-fill compare-fill-planejado" style="width:${wP}%"></div></div><span class="compare-value">${planejado}h</span></div>
+        <div class="compare-bar-row"><div class="compare-track"><div class="compare-fill compare-fill-registrado" style="width:${wR}%"></div></div><span class="compare-value">${registrado}h</span></div>
+      </div>`;
   }
 
   // Junta tudo que o card de um consultor precisa mostrar: status de hoje,
@@ -222,23 +276,28 @@
       ? `<div class="consultor-alertas">${m.alertas.map(a => `<div class="alerta-item">⚠ ${escapeHtml(a)}</div>`).join('')}</div>`
       : '';
     card.innerHTML = `
-      <div>
-        <h3>${escapeHtml(consultor.nome || consultor.email)}</h3>
-        <div class="consultor-email">${escapeHtml(consultor.email || '')}</div>
+      <div class="consultor-main">
+        <div>
+          <h3>${escapeHtml(consultor.nome || consultor.email)}</h3>
+          <div class="consultor-email">${escapeHtml(consultor.email || '')}</div>
+        </div>
+        ${statusBadgeHtml(m.hoje)}
+        <div class="consultor-count">${m.assessoriaCount} assessoria(s) ativa(s)</div>
       </div>
-      ${statusBadgeHtml(m.hoje)}
-      <div class="consultor-count">${m.assessoriaCount} assessoria(s) ativa(s)</div>
-      <div class="metric-block">
+      <div class="consultor-col">
         <div class="metric-title">Ocupação do mês (meta ${OCUPACAO_META_MENSAL}h)</div>
-        ${metricRowHtml('Planejada', `${m.ocupacaoPlanejada}% (${m.planejadoMes}h)`, ocupacaoClass(m.ocupacaoPlanejada))}
-        ${metricRowHtml('Registrada', `${m.ocupacaoRegistrada}% (${m.registradoMes}h)`, ocupacaoClass(m.ocupacaoRegistrada))}
+        ${meterRowHtml('Planejada', m.ocupacaoPlanejada, `${m.ocupacaoPlanejada}% (${m.planejadoMes}h)`)}
+        ${meterRowHtml('Registrada', m.ocupacaoRegistrada, `${m.ocupacaoRegistrada}% (${m.registradoMes}h)`)}
       </div>
-      <div class="metric-block">
+      <div class="consultor-col">
         <div class="metric-title">Planejado × Registrado</div>
-        ${metricRowHtml('Semana atual', `${m.planejadoSemana}h × ${m.registradoSemana}h`)}
-        ${metricRowHtml('Mês atual', `${m.planejadoMes}h × ${m.registradoMes}h`)}
+        <div class="compare-legend"><span><i class="legend-planejado"></i>Planejado</span><span><i class="legend-registrado"></i>Registrado</span></div>
+        <div class="compare-groups">
+          ${comparePairHtml('Semana atual', m.planejadoSemana, m.registradoSemana)}
+          ${comparePairHtml('Mês atual', m.planejadoMes, m.registradoMes)}
+        </div>
       </div>
-      <div class="metric-block">
+      <div class="consultor-col">
         <div class="metric-title">Banco de horas (deslocamento)</div>
         ${metricRowHtml('Gerado no mês', `${m.deslocGeradoMes}h`)}
         ${metricRowHtml('Compensado no mês', `${m.compensadoMes}h`)}
