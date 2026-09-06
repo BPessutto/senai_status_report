@@ -8,7 +8,7 @@
 <style>
   .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
   .grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
-  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;display:grid;grid-template-columns:190px 1fr 1fr 190px;gap:22px;align-items:start;cursor:pointer;text-align:left;font-family:inherit;color:inherit;width:100%}
+  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;display:grid;grid-template-columns:210px 1fr 220px;gap:22px;align-items:start;cursor:pointer;text-align:left;font-family:inherit;color:inherit;width:100%}
   .consultor-card:hover{filter:brightness(.98)}
   .consultor-card h3{margin:0;font-size:15px;color:var(--navy)}
   .consultor-card .consultor-email{font-size:11px;color:var(--muted);margin-bottom:8px}
@@ -44,20 +44,16 @@
   .meter-fill.ocup-alta{background:var(--danger)}
   .meter-fill.ocup-ok{background:var(--green)}
   .meter-fill.ocup-baixa{background:var(--amber)}
-  .compare-legend{display:flex;gap:14px;font-size:10px;color:var(--muted);margin-bottom:8px}
-  .compare-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
-  .legend-planejado{background:var(--blue)}
-  .legend-registrado{background:var(--green)}
-  .compare-groups{display:flex;gap:18px}
-  .compare-group{flex:1;min-width:0}
-  .compare-group-label{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:5px}
-  .compare-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-  .compare-bar-row:last-child{margin-bottom:0}
-  .compare-track{flex:1;height:7px;background:#eef1f5;border-radius:999px;overflow:hidden;min-width:0}
-  .compare-fill{height:100%;border-radius:999px}
-  .compare-fill-planejado{background:var(--blue)}
-  .compare-fill-registrado{background:var(--green)}
-  .compare-value{font-size:10.5px;color:var(--text);font-weight:700;width:38px;text-align:right;flex-shrink:0}
+  .assessorias-vigentes{grid-column:1 / -1;border-top:1px solid var(--border);padding-top:10px;margin-top:2px}
+  .assessorias-vigentes-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px}
+  .assessorias-mini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+  .assessoria-mini{border:1px solid var(--border);border-radius:8px;padding:9px 11px;background:#fbfcfe}
+  .assessoria-mini-nome{font-size:11.5px;font-weight:800;color:var(--navy);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .assessoria-mini-fase{font-size:10.5px;color:var(--muted);margin-bottom:6px}
+  .assessoria-mini-track{height:5px;background:#eef1f5;border-radius:999px;overflow:hidden;margin-bottom:4px}
+  .assessoria-mini-fill{height:100%;border-radius:999px;background:var(--blue)}
+  .assessoria-mini-fill.concluida{background:var(--green)}
+  .assessoria-mini-horas{font-size:10px;color:var(--muted);text-align:right}
   @media(max-width:860px){
     .consultor-card{grid-template-columns:1fr}
     .consultor-col{border-left:none;border-top:1px solid var(--border);padding-left:0;padding-top:10px}
@@ -107,14 +103,6 @@
   }
   function round1(x){ return Math.round(Number(x||0) * 10) / 10; }
 
-  // Segunda-feira da semana que contém "hoje" (ISO), em UTC.
-  function segundaDaSemana(hoje){
-    const [y,m,d] = hoje.split('-').map(Number);
-    const diaSemana = new Date(Date.UTC(y, m-1, d)).getUTCDay(); // 0=dom..6=sáb
-    const voltar = diaSemana === 0 ? 6 : diaSemana - 1;
-    return addDaysISO(hoje, -voltar);
-  }
-
   function statusBadgeHtml(status){
     if (status.tipo === 'visita') return `<span class="status-badge status-visita"><i></i>Em visita — ${escapeHtml(status.empresa)} (${status.horas}h)</span>`;
     if (status.tipo === 'planejado') return `<span class="status-badge status-planejado"><i></i>Planejado — ${escapeHtml(status.empresa)} (${status.horas}h)</span>`;
@@ -144,17 +132,17 @@
       </div>`;
   }
 
-  // Par de barras (Planejado x Registrado) com escala local ao grupo, pra
-  // sempre mostrar as duas barras com um comprimento legível.
-  function comparePairHtml(label, planejado, registrado){
-    const max = Math.max(planejado, registrado, 1);
-    const wP = Math.min(100, round1((planejado / max) * 100));
-    const wR = Math.min(100, round1((registrado / max) * 100));
+  // Mini-card de uma assessoria vigente do consultor: fase atual e progresso
+  // de horas, pra o gestor bater o olho sem precisar entrar em cada uma.
+  function assessoriaMiniHtml(a){
+    const pct = a.totalPrevisto > 0 ? Math.min(100, round1((a.totalReal / a.totalPrevisto) * 100)) : 0;
+    const concluida = a.etapaStatus === 'Concluído' && pct >= 100;
     return `
-      <div class="compare-group">
-        <div class="compare-group-label">${label}</div>
-        <div class="compare-bar-row"><div class="compare-track"><div class="compare-fill compare-fill-planejado" style="width:${wP}%"></div></div><span class="compare-value">${planejado}h</span></div>
-        <div class="compare-bar-row"><div class="compare-track"><div class="compare-fill compare-fill-registrado" style="width:${wR}%"></div></div><span class="compare-value">${registrado}h</span></div>
+      <div class="assessoria-mini">
+        <div class="assessoria-mini-nome" title="${escapeHtml(a.nome)}">${escapeHtml(a.nome)}</div>
+        <div class="assessoria-mini-fase">${a.etapaCurto ? escapeHtml(a.etapaCurto) + ' · ' + escapeHtml(a.etapaStatus) : 'Sem etapas'}</div>
+        <div class="assessoria-mini-track"><div class="assessoria-mini-fill${concluida ? ' concluida' : ''}" style="width:${pct}%"></div></div>
+        <div class="assessoria-mini-horas">${a.totalReal}/${a.totalPrevisto}h</div>
       </div>`;
   }
 
@@ -168,8 +156,6 @@
     const compensacoes = compensacoesTodas.filter(c => c.owner_id === consultorId);
 
     const mesAtual = hoje.slice(0, 7);
-    const semanaInicio = segundaDaSemana(hoje);
-    const semanaFim = addDaysISO(semanaInicio, 6);
 
     let hojeInfo = { tipo: 'livre', empresa: null, horas: 0 };
     for (const a of ativas) {
@@ -187,18 +173,14 @@
       if (comp) hojeInfo = { tipo: 'compensando', empresa: null, horas: round1(comp.horas || 8) };
     }
 
-    let planejadoSemana = 0, registradoSemana = 0, planejadoMes = 0, registradoMes = 0;
+    let planejadoMes = 0, registradoMes = 0;
     ativas.forEach(a => {
       const d = a.data || {};
       (d.visitasPlanejadas || []).forEach(p => {
-        const h = Number(p.horas || 0);
-        if (p.dataISO >= semanaInicio && p.dataISO <= semanaFim) planejadoSemana += h;
-        if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += h;
+        if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += Number(p.horas || 0);
       });
       (d.visitas || []).forEach(v => {
-        const h = Number(v.horasNoDia || 0);
-        if (v.dataISO >= semanaInicio && v.dataISO <= semanaFim) registradoSemana += h;
-        if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += h;
+        if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += Number(v.horasNoDia || 0);
       });
     });
 
@@ -257,10 +239,26 @@
       }
     });
 
+    // Resumo de cada assessoria vigente (fase atual e progresso de horas),
+    // pra listar no card do consultor sem precisar entrar em cada uma.
+    const assessoriasResumo = ativas.map(a => {
+      const d = a.data || {};
+      const etapas = d.etapas || [];
+      const atual = etapas.find(e => e.status !== 'Concluído') || etapas[etapas.length - 1] || null;
+      const totalReal = etapas.reduce((s, e) => s + Number(e.real || 0), 0);
+      return {
+        nome: a.cliente_nome || a.nome,
+        etapaCurto: atual ? atual.curto : null,
+        etapaStatus: atual ? atual.status : null,
+        totalReal: round1(totalReal),
+        totalPrevisto: round1(d.totalPrevisto || 0)
+      };
+    });
+
     return {
       hoje: hojeInfo,
       assessoriaCount: ativas.length,
-      planejadoSemana: round1(planejadoSemana), registradoSemana: round1(registradoSemana),
+      assessorias: assessoriasResumo,
       planejadoMes: round1(planejadoMes), registradoMes: round1(registradoMes),
       ocupacaoPlanejada, ocupacaoRegistrada,
       deslocGeradoMes: round1(deslocGeradoMes), compensadoMes: round1(compensadoMes), saldoBanco,
@@ -286,22 +284,20 @@
       </div>
       <div class="consultor-col">
         <div class="metric-title">Ocupação do mês (meta ${OCUPACAO_META_MENSAL}h)</div>
-        ${meterRowHtml('Planejada', m.ocupacaoPlanejada, `${m.ocupacaoPlanejada}% (${m.planejadoMes}h)`)}
-        ${meterRowHtml('Registrada', m.ocupacaoRegistrada, `${m.ocupacaoRegistrada}% (${m.registradoMes}h)`)}
-      </div>
-      <div class="consultor-col">
-        <div class="metric-title">Planejado × Registrado</div>
-        <div class="compare-legend"><span><i class="legend-planejado"></i>Planejado</span><span><i class="legend-registrado"></i>Registrado</span></div>
-        <div class="compare-groups">
-          ${comparePairHtml('Semana atual', m.planejadoSemana, m.registradoSemana)}
-          ${comparePairHtml('Mês atual', m.planejadoMes, m.registradoMes)}
-        </div>
+        ${meterRowHtml('Planejada', m.ocupacaoPlanejada, `${m.planejadoMes}/${OCUPACAO_META_MENSAL}h (${m.ocupacaoPlanejada}%)`)}
+        ${meterRowHtml('Registrada', m.ocupacaoRegistrada, `${m.registradoMes}/${OCUPACAO_META_MENSAL}h (${m.ocupacaoRegistrada}%)`)}
       </div>
       <div class="consultor-col">
         <div class="metric-title">Banco de horas (deslocamento)</div>
         ${metricRowHtml('Gerado no mês', `${m.deslocGeradoMes}h`)}
         ${metricRowHtml('Compensado no mês', `${m.compensadoMes}h`)}
         ${metricRowHtml('Saldo acumulado', `${m.saldoBanco}h`, m.saldoBanco > 0 ? 'saldo-devedor' : '')}
+      </div>
+      <div class="assessorias-vigentes">
+        <div class="assessorias-vigentes-title">Assessorias vigentes (${m.assessorias.length})</div>
+        ${m.assessorias.length
+          ? `<div class="assessorias-mini-grid">${m.assessorias.map(assessoriaMiniHtml).join('')}</div>`
+          : `<div class="muted" style="font-size:11.5px">Nenhuma assessoria ativa.</div>`}
       </div>
       ${alertasHtml}
     `;
