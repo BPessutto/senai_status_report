@@ -8,7 +8,7 @@
 <style>
   .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
   .grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
-  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;display:grid;grid-template-columns:210px 1fr 220px;gap:22px;align-items:start;cursor:pointer;text-align:left;font-family:inherit;color:inherit;width:100%}
+  .consultor-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;display:grid;grid-template-columns:190px 1fr 1fr 200px;gap:22px;align-items:start;cursor:pointer;text-align:left;font-family:inherit;color:inherit;width:100%}
   .consultor-card:hover{filter:brightness(.98)}
   .consultor-card h3{margin:0;font-size:15px;color:var(--navy)}
   .consultor-card .consultor-email{font-size:11px;color:var(--muted);margin-bottom:8px}
@@ -91,6 +91,7 @@
   import { computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS } from './js/stage-template.js';
 
   const OCUPACAO_META_MENSAL = 144; // horas/mês = 100% do indicador de ocupação do BI
+  const OCUPACAO_META_SEMANAL = 36; // 144h / 4 semanas
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
@@ -114,6 +115,28 @@
     if (pct > 100) return 'ocup-alta';
     if (pct >= 85) return 'ocup-ok';
     return 'ocup-baixa';
+  }
+
+  // Segunda-feira da semana que contém "hoje" (ISO), em UTC.
+  function segundaDaSemana(hoje){
+    const [y,m,d] = hoje.split('-').map(Number);
+    const diaSemana = new Date(Date.UTC(y, m-1, d)).getUTCDay(); // 0=dom..6=sáb
+    const voltar = diaSemana === 0 ? 6 : diaSemana - 1;
+    return addDaysISO(hoje, -voltar);
+  }
+
+  // Uma fase é tratada como concluída se o status já foi marcado assim, ou
+  // se as horas e os entregáveis obrigatórios já batem a meta — mesmo
+  // critério de conclusão automática do painel da assessoria (dashboard.html),
+  // que só é gravado no banco quando o consultor abre aquela assessoria.
+  // Recalcular aqui evita mostrar uma fase como "em andamento" quando na
+  // prática ela já terminou, mas ainda não foi salva assim.
+  function etapaConcluidaEfetiva(e){
+    if (e.status === 'Concluído') return true;
+    const entregaveis = Array.isArray(e.entregaveis) ? e.entregaveis : [];
+    const obrigatoriosCumpridos = entregaveis.filter(d => d.required).every(d => d.done);
+    const horasCompletas = Number(e.prev) > 0 && Number(e.real) >= Number(e.prev);
+    return horasCompletas && obrigatoriosCumpridos;
   }
 
   function metricRowHtml(label, value, cls){
@@ -156,6 +179,8 @@
     const compensacoes = compensacoesTodas.filter(c => c.owner_id === consultorId);
 
     const mesAtual = hoje.slice(0, 7);
+    const semanaInicio = segundaDaSemana(hoje);
+    const semanaFim = addDaysISO(semanaInicio, 6);
 
     let hojeInfo = { tipo: 'livre', empresa: null, horas: 0 };
     for (const a of ativas) {
@@ -173,19 +198,25 @@
       if (comp) hojeInfo = { tipo: 'compensando', empresa: null, horas: round1(comp.horas || 8) };
     }
 
-    let planejadoMes = 0, registradoMes = 0;
+    let planejadoMes = 0, registradoMes = 0, planejadoSemana = 0, registradoSemana = 0;
     ativas.forEach(a => {
       const d = a.data || {};
       (d.visitasPlanejadas || []).forEach(p => {
-        if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += Number(p.horas || 0);
+        const h = Number(p.horas || 0);
+        if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += h;
+        if (p.dataISO >= semanaInicio && p.dataISO <= semanaFim) planejadoSemana += h;
       });
       (d.visitas || []).forEach(v => {
-        if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += Number(v.horasNoDia || 0);
+        const h = Number(v.horasNoDia || 0);
+        if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += h;
+        if (v.dataISO >= semanaInicio && v.dataISO <= semanaFim) registradoSemana += h;
       });
     });
 
     const ocupacaoPlanejada = round1((planejadoMes / OCUPACAO_META_MENSAL) * 100);
     const ocupacaoRegistrada = round1((registradoMes / OCUPACAO_META_MENSAL) * 100);
+    const ocupacaoSemanaPlanejada = round1((planejadoSemana / OCUPACAO_META_SEMANAL) * 100);
+    const ocupacaoSemanaRegistrada = round1((registradoSemana / OCUPACAO_META_SEMANAL) * 100);
 
     // Banco de horas de deslocamento: histórico completo (ativas + arquivadas),
     // mesma lógica do painel do consultor.
@@ -244,12 +275,12 @@
     const assessoriasResumo = ativas.map(a => {
       const d = a.data || {};
       const etapas = d.etapas || [];
-      const atual = etapas.find(e => e.status !== 'Concluído') || etapas[etapas.length - 1] || null;
+      const atual = etapas.find(e => !etapaConcluidaEfetiva(e)) || etapas[etapas.length - 1] || null;
       const totalReal = etapas.reduce((s, e) => s + Number(e.real || 0), 0);
       return {
         nome: a.cliente_nome || a.nome,
         etapaCurto: atual ? atual.curto : null,
-        etapaStatus: atual ? atual.status : null,
+        etapaStatus: atual ? (etapaConcluidaEfetiva(atual) ? 'Concluído' : atual.status) : null,
         totalReal: round1(totalReal),
         totalPrevisto: round1(d.totalPrevisto || 0)
       };
@@ -261,6 +292,8 @@
       assessorias: assessoriasResumo,
       planejadoMes: round1(planejadoMes), registradoMes: round1(registradoMes),
       ocupacaoPlanejada, ocupacaoRegistrada,
+      planejadoSemana: round1(planejadoSemana), registradoSemana: round1(registradoSemana),
+      ocupacaoSemanaPlanejada, ocupacaoSemanaRegistrada,
       deslocGeradoMes: round1(deslocGeradoMes), compensadoMes: round1(compensadoMes), saldoBanco,
       alertas
     };
@@ -281,6 +314,11 @@
         </div>
         ${statusBadgeHtml(m.hoje)}
         <div class="consultor-count">${m.assessoriaCount} assessoria(s) ativa(s)</div>
+      </div>
+      <div class="consultor-col">
+        <div class="metric-title">Ocupação da semana (meta ${OCUPACAO_META_SEMANAL}h)</div>
+        ${meterRowHtml('Planejada', m.ocupacaoSemanaPlanejada, `${m.planejadoSemana}/${OCUPACAO_META_SEMANAL}h (${m.ocupacaoSemanaPlanejada}%)`)}
+        ${meterRowHtml('Registrada', m.ocupacaoSemanaRegistrada, `${m.registradoSemana}/${OCUPACAO_META_SEMANAL}h (${m.ocupacaoSemanaRegistrada}%)`)}
       </div>
       <div class="consultor-col">
         <div class="metric-title">Ocupação do mês (meta ${OCUPACAO_META_MENSAL}h)</div>
