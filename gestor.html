@@ -20,8 +20,8 @@
   .status-visita i{background:var(--green)}
   .status-planejado{background:#dbeafe;color:#1d4ed8}
   .status-planejado i{background:#1d4ed8}
-  .status-compensando{background:#ede9fe;color:#6d28d9}
-  .status-compensando i{background:#6d28d9}
+  .status-compensando{background:var(--compbg);color:var(--comp)}
+  .status-compensando i{background:var(--comp)}
   .status-livre{background:#eef1f5;color:var(--muted)}
   .status-livre i{background:var(--muted)}
   .consultor-count{font-size:11px;color:var(--muted)}
@@ -68,7 +68,6 @@
         <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
       </div>
       <div class="title-block">
-        <div class="eyebrow">ACOMPANHAMENTO DE CONSULTORIAS</div>
         <h1>Cronogramas e Painel de Assessorias</h1>
         <div class="sub" id="user-email"></div>
       </div>
@@ -139,6 +138,24 @@
     return horasCompletas && obrigatoriosCumpridos;
   }
 
+  // Fatia de um consultor específico numa entrada (visita ou planejamento).
+  // Com participantes[], é só a parte dele; sem participantes (dado antigo),
+  // a entrada inteira pertence a quem é dono da assessoria.
+  function fatiaDoConsultor(assessoria, entrada, consultorId){
+    if (Array.isArray(entrada.participantes)) {
+      const p = entrada.participantes.find(x => x.consultorId === consultorId);
+      return p ? Number(p.horas || 0) : 0;
+    }
+    return assessoria.owner_id === consultorId ? Number(entrada.horasNoDia ?? entrada.horas ?? 0) : 0;
+  }
+
+  // Deslocamento é um valor único por visita: quem participou recebe o valor
+  // integral (não dividido), não uma fração — mesma regra do painel.html.
+  function souParticipanteDaVisita(assessoria, v, consultorId){
+    if (Array.isArray(v.participantes)) return v.participantes.some(p => p.consultorId === consultorId);
+    return assessoria.owner_id === consultorId;
+  }
+
   function metricRowHtml(label, value, cls){
     return `<div class="metric-row"><span>${label}</span><strong class="${cls || ''}">${value}</strong></div>`;
   }
@@ -173,8 +190,11 @@
   // ocupação do mês (planejada x registrada, meta de 144h), comparação
   // planejado x registrado (semana e mês), banco de horas de deslocamento e
   // alertas de prazo (1º apontamento, encerramento, fases furadas).
-  function computeConsultorMetrics(consultorId, todasAssessorias, compensacoesTodas, hoje){
-    const doConsultor = todasAssessorias.filter(a => a.owner_id === consultorId);
+  function computeConsultorMetrics(consultorId, todasAssessorias, colaboracoesTodas, compensacoesTodas, hoje){
+    const colaboracaoIds = new Set((colaboracoesTodas || []).filter(c => c.colaborador_id === consultorId).map(c => c.assessoria_id));
+    // Owner OU consultor vinculado — não só owner, senão o consultor
+    // convidado nunca apareceria com atividade/ocupação/banco de horas.
+    const doConsultor = todasAssessorias.filter(a => a.owner_id === consultorId || colaboracaoIds.has(a.id));
     const ativas = doConsultor.filter(a => a.ativo !== false);
     const compensacoes = compensacoesTodas.filter(c => c.owner_id === consultorId);
 
@@ -185,12 +205,18 @@
     let hojeInfo = { tipo: 'livre', empresa: null, horas: 0 };
     for (const a of ativas) {
       const v = ((a.data && a.data.visitas) || []).find(x => x.dataISO === hoje);
-      if (v) { hojeInfo = { tipo: 'visita', empresa: a.cliente_nome || a.nome, horas: round1(v.horasNoDia) }; break; }
+      if (v) {
+        const minhas = fatiaDoConsultor(a, v, consultorId);
+        if (minhas > 0) { hojeInfo = { tipo: 'visita', empresa: a.cliente_nome || a.nome, horas: round1(minhas) }; break; }
+      }
     }
     if (hojeInfo.tipo === 'livre') {
       for (const a of ativas) {
         const p = ((a.data && a.data.visitasPlanejadas) || []).find(x => x.dataISO === hoje);
-        if (p) { hojeInfo = { tipo: 'planejado', empresa: a.cliente_nome || a.nome, horas: round1(p.horas) }; break; }
+        if (p) {
+          const minhas = fatiaDoConsultor(a, p, consultorId);
+          if (minhas > 0) { hojeInfo = { tipo: 'planejado', empresa: a.cliente_nome || a.nome, horas: round1(minhas) }; break; }
+        }
       }
     }
     if (hojeInfo.tipo === 'livre') {
@@ -202,12 +228,12 @@
     ativas.forEach(a => {
       const d = a.data || {};
       (d.visitasPlanejadas || []).forEach(p => {
-        const h = Number(p.horas || 0);
+        const h = fatiaDoConsultor(a, p, consultorId);
         if (p.dataISO && p.dataISO.slice(0, 7) === mesAtual) planejadoMes += h;
         if (p.dataISO >= semanaInicio && p.dataISO <= semanaFim) planejadoSemana += h;
       });
       (d.visitas || []).forEach(v => {
-        const h = Number(v.horasNoDia || 0);
+        const h = fatiaDoConsultor(a, v, consultorId);
         if (v.dataISO && v.dataISO.slice(0, 7) === mesAtual) registradoMes += h;
         if (v.dataISO >= semanaInicio && v.dataISO <= semanaFim) registradoSemana += h;
       });
@@ -223,6 +249,7 @@
     let deslocGeradoTotal = 0, deslocGeradoMes = 0;
     doConsultor.forEach(a => {
       ((a.data && a.data.visitas) || []).forEach(v => {
+        if (!souParticipanteDaVisita(a, v, consultorId)) return;
         const h = Number(v.deslocamentoHoras || 0);
         if (h > 0) {
           deslocGeradoTotal += h;
@@ -362,13 +389,14 @@
     }
 
     const { data: assessorias } = await sb.from('assessorias')
-      .select('owner_id,nome,cliente_nome,ativo,data,data_contratacao,prazo_encerramento_manual');
+      .select('id,owner_id,nome,cliente_nome,ativo,data,data_contratacao,prazo_encerramento_manual');
     const { data: compensacoes } = await sb.from('compensacoes').select('owner_id,data_iso,horas');
+    const { data: colaboracoes } = await sb.from('assessoria_colaboradores').select('assessoria_id,colaborador_id');
     const hoje = todayISO();
 
     grid.innerHTML = '';
     consultores.forEach(consultor => {
-      const m = computeConsultorMetrics(consultor.id, assessorias || [], compensacoes || [], hoje);
+      const m = computeConsultorMetrics(consultor.id, assessorias || [], colaboracoes || [], compensacoes || [], hoje);
       grid.appendChild(renderCard(consultor, m));
     });
   }

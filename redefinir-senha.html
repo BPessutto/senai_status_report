@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redefinir senha · Painel de Assessorias</title>
+<link rel="stylesheet" href="js/shared.css">
+<style>
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .login-wrap{width:100%;max-width:380px;padding:0 16px}
+  .brand{display:flex;justify-content:center;gap:10px;margin-bottom:18px}
+  .brand img{height:36px}
+  .card{margin-top:0}
+  h1{font-size:18px;text-align:center;color:var(--navy)}
+  .sub-login{text-align:center;font-size:12.5px;color:var(--muted);margin-bottom:18px}
+  .btn-block{width:100%;justify-content:center;padding:11px}
+  .ok-box{background:var(--greenbg);color:var(--green);border:1px solid #cfe6d1;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+  .link-voltar{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:var(--blue);text-decoration:none}
+  .link-voltar:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="brand">
+    <img src="assets/logo-senai.png" alt="SENAI">
+  </div>
+  <div class="card">
+    <h1>Painel de Assessorias</h1>
+    <div class="sub-login">Definir nova senha</div>
+
+    <div id="validando-area" class="sub-login">Validando link de recuperação...</div>
+
+    <form id="reset-form" class="hidden">
+      <div class="field">
+        <label for="nova-senha">Nova senha</label>
+        <input type="password" id="nova-senha" required autocomplete="new-password" minlength="6">
+      </div>
+      <div class="field">
+        <label for="confirmar-senha">Confirmar nova senha</label>
+        <input type="password" id="confirmar-senha" required autocomplete="new-password" minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="btn-redefinir">Redefinir senha</button>
+    </form>
+
+    <div id="msg-area"></div>
+
+    <div id="sucesso-area" class="hidden">
+      <div class="ok-box">Senha alterada com sucesso. Você já pode entrar.</div>
+      <a href="login.html" class="link-voltar">‹ Voltar para o login</a>
+    </div>
+
+    <div id="link-invalido-area" class="hidden">
+      <div class="error-box">Este link de recuperação é inválido ou expirou. Solicite um novo em "Esqueci minha senha" na tela de login.</div>
+      <a href="login.html" class="link-voltar">‹ Voltar para o login</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script type="module">
+  import { sb } from './js/supabase-client.js';
+
+  const form = document.getElementById('reset-form');
+  const btn = document.getElementById('btn-redefinir');
+  const msgArea = document.getElementById('msg-area');
+  const validandoArea = document.getElementById('validando-area');
+  const sucessoArea = document.getElementById('sucesso-area');
+  const linkInvalidoArea = document.getElementById('link-invalido-area');
+
+  function showError(text){ msgArea.innerHTML = `<div class="error-box">${text}</div>`; }
+  function clearMsg(){ msgArea.innerHTML = ''; }
+
+  // O link de recuperação do Supabase chega com marcadores próprios na URL
+  // (hash no fluxo implícito, query no PKCE) — type=recovery quando é um
+  // link válido, ou error=... quando o Supabase já sabe de cara que o link
+  // expirou/foi usado. Isso é um sinal real e imediato, disponível antes de
+  // qualquer processamento assíncrono do client, e serve tanto pra decidir
+  // se vale a pena esperar quanto pra validar o resultado depois.
+  function hashParams(){ return new URLSearchParams(window.location.hash.replace(/^#/, '')); }
+  function urlTemErroRecovery(){ return hashParams().has('error'); }
+  function urlPareceRecovery(){
+    return hashParams().get('type') === 'recovery' || new URLSearchParams(window.location.search).get('type') === 'recovery';
+  }
+
+  let estadoResolvido = false;
+  function confirmarRecovery(){
+    if (estadoResolvido) return;
+    estadoResolvido = true;
+    validandoArea.classList.add('hidden');
+    linkInvalidoArea.classList.add('hidden');
+    form.classList.remove('hidden');
+  }
+  function declararInvalido(){
+    if (estadoResolvido) return;
+    estadoResolvido = true;
+    validandoArea.classList.add('hidden');
+    form.classList.add('hidden');
+    linkInvalidoArea.classList.remove('hidden');
+  }
+
+  // supabase-js processa o token de recuperação da URL ao inicializar
+  // (detectSessionInUrl, ligado por padrão) — isso começa a acontecer já na
+  // criação do client em js/supabase-client.js, que roda durante o import
+  // acima, ANTES desta linha. Existe uma janela real de corrida (mais
+  // provável no fluxo PKCE, que troca o "code" por sessão via rede) em que
+  // PASSWORD_RECOVERY pode disparar antes deste listener ser registrado —
+  // por isso o fallback abaixo com getSession() + o marcador da URL, em vez
+  // de depender só deste evento chegar a tempo.
+  //
+  // Só o evento PASSWORD_RECOVERY confirma recovery — nunca tratamos
+  // SIGNED_IN/INITIAL_SESSION isolados como suficientes, pra não liberar a
+  // troca de senha com uma sessão comum já logada neste navegador.
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') { confirmarRecovery(); return; }
+    // Alguns fluxos (principalmente PKCE) podem terminar disparando SIGNED_IN
+    // em vez de PASSWORD_RECOVERY pro mesmo link — só aceita combinado com o
+    // marcador de recovery na URL que originou esta aba.
+    if (event === 'SIGNED_IN' && urlPareceRecovery()) confirmarRecovery();
+  });
+
+  (async () => {
+    if (urlTemErroRecovery()) { declararInvalido(); return; }
+
+    if (!urlPareceRecovery()) {
+      // Sem marcador de recovery na URL: não é um link de recuperação
+      // (alguém abriu a página direto, ou a sessão comum do navegador não
+      // conta). Nada a esperar.
+      declararInvalido();
+      return;
+    }
+
+    // A URL indica recovery. Se o client já processou o token antes deste
+    // ponto (corrida com o listener acima), getSession() já reflete isso.
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) { confirmarRecovery(); return; }
+
+    // Ainda não confirmado — mantém "validando" e espera o evento chegar.
+    // Este timeout é só um teto de segurança de UX (ex.: falha de rede
+    // silenciosa no PKCE), não o critério de validade: se o evento chegar
+    // antes, confirmarRecovery()/declararInvalido() já resolveram e este
+    // callback não faz nada (estadoResolvido).
+    setTimeout(declararInvalido, 9000);
+  })();
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    clearMsg();
+    const novaSenha = document.getElementById('nova-senha').value;
+    const confirmarSenha = document.getElementById('confirmar-senha').value;
+
+    if (!novaSenha || !confirmarSenha) {
+      showError('Preencha os dois campos de senha.');
+      return;
+    }
+    if (novaSenha.length < 6) {
+      showError('A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (novaSenha !== confirmarSenha) {
+      showError('As senhas informadas não são iguais.');
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const { error } = await sb.auth.updateUser({ password: novaSenha });
+      if (error) throw error;
+      await sb.auth.signOut();
+      form.classList.add('hidden');
+      clearMsg();
+      sucessoArea.classList.remove('hidden');
+    } catch (err) {
+      showError(err.message || 'Não foi possível alterar a senha agora. Tente novamente.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

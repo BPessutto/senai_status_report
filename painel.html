@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="js/shared.css">
 <style>
   .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px}
   .assessoria-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
   .assessoria-card h3{margin:0;font-size:15px;color:var(--navy)}
   .assessoria-card .cliente{font-size:12px;color:var(--muted)}
@@ -34,18 +34,27 @@
   .cal-head{font-weight:800;font-size:9.5px;color:var(--muted);text-transform:uppercase;aspect-ratio:auto}
   .cal-empty{background:transparent}
   .cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
-  .cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:pointer;font-weight:700}
+  .cal-compensacao{background:var(--compbg);color:var(--comp);cursor:pointer;font-weight:700}
   .cal-feriado{background:#fef3c7;color:#92400e;cursor:pointer;font-weight:700}
   .cal-arquivada{background:#e2e8f0;color:#64748b;cursor:pointer;font-weight:700}
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
+  .cal-cell[data-clickable]:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
   .banco-note-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);margin-bottom:8px}
   .banco-linha{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .banco-linha-item{font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:4px}
   .banco-saldo{font-size:13.5px;font-weight:800;padding:8px 12px;border-radius:var(--radius-sm);display:inline-block}
   .banco-ok{background:var(--greenbg);color:var(--green)}
   .banco-atencao{background:var(--amberbg);color:var(--amber)}
   .banco-vencido{background:#fde2e1;color:var(--danger)}
   .banco-aviso{font-size:12px;color:var(--danger);font-weight:700;margin-top:6px}
+  .consultores-hint{font-size:11px;color:var(--muted);margin:-4px 0 8px}
+  .consultores-lista{border:1px solid var(--border);border-radius:8px;max-height:160px;overflow-y:auto;padding:4px}
+  .consultores-lista label{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--text);cursor:pointer}
+  .consultores-lista label:hover{background:#f4f7fb}
+  .consultores-lista input{width:15px;height:15px}
+  .consultores-vazio{padding:8px;font-size:12.5px;color:var(--muted)}
+  .consultores-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--navy);background:#eef1f5;padding:3px 8px;border-radius:var(--radius-pill);margin-top:6px;width:fit-content}
 </style>
 </head>
 <body>
@@ -56,7 +65,6 @@
         <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
       </div>
       <div class="title-block">
-        <div class="eyebrow">ACOMPANHAMENTO DE CONSULTORIAS</div>
         <h1 id="page-title">Minhas Assessorias</h1>
         <div class="sub" id="user-email"></div>
       </div>
@@ -64,6 +72,7 @@
     <div class="header-actions">
       <a class="btn btn-ghost hidden" id="btn-voltar-gestor" href="gestor.html">‹ Painel gerencial</a>
       <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
+      <button class="btn btn-ghost hidden" id="btn-sgset-semanal">Gerar SGSET semanal</button>
       <button class="btn btn-ghost hidden" id="btn-ver-arquivadas">Ver arquivadas</button>
       <button class="btn btn-ghost" id="btn-logout">Sair</button>
     </div>
@@ -77,10 +86,9 @@
     <div class="card-title">
       <span>Calendário geral</span>
       <div class="cal-year-nav">
-        <button type="button" class="btn btn-sm" id="btn-banco-horas" title="Banco de Horas Para Compensação">🏦</button>
-        <button type="button" class="btn btn-sm" id="btn-ano-anterior">‹</button>
+        <button type="button" class="btn btn-sm" id="btn-ano-anterior" aria-label="Ano anterior">‹</button>
         <span id="ano-atual-label"></span>
-        <button type="button" class="btn btn-sm" id="btn-ano-seguinte">›</button>
+        <button type="button" class="btn btn-sm" id="btn-ano-seguinte" aria-label="Próximo ano">›</button>
       </div>
     </div>
     <div id="calendario-legenda" class="cal-legenda-consolidado"></div>
@@ -108,6 +116,11 @@
         <label for="nova-proposta">Nº da proposta (opcional)</label>
         <input type="text" id="nova-proposta" placeholder="Ex.: 186/2026">
       </div>
+      <div class="field">
+        <label>Consultores</label>
+        <div class="consultores-hint">Além de você, quem mais participa desta assessoria?</div>
+        <div id="nova-consultores-lista" class="consultores-lista"></div>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="btn-salvar-nova">Criar assessoria</button>
@@ -124,6 +137,7 @@
   import { defaultState } from './js/stage-template.js';
   import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex, nationalHolidayMap } from './js/calendar-utils.js';
   import { showActionPanel } from './js/action-panel.js';
+  import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado, showSgsetSelecao } from './js/sgset.js';
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
@@ -153,6 +167,9 @@
   }
 
   let session = null;
+  let meuNome = '';
+  let consultoresDisponiveis = [];
+  let colaboradoresPorAssessoria = new Map();
   let isOwnerOfSomething = false;
   let mostrarArquivadas = false;
   let editingAssessoriaId = null;
@@ -162,8 +179,75 @@
   // consultor que o gestor escolheu acompanhar (?as=). Tudo que hoje usa
   // session.user.id pra decidir "de quem é isso" passa a usar este valor.
   let effectiveUserId = null;
+  // Nome de quem é dono das assessorias mostradas (não de quem está logado) —
+  // usado no texto do SGSET, pra bater com effectiveUserId mesmo quando o
+  // gestor está vendo como outro consultor.
+  let nomeConsultorAtivo = '';
 
-  function openEditModal(row){
+  async function carregarConsultoresDisponiveis(){
+    const { data, error } = await sb.rpc('list_consultores');
+    consultoresDisponiveis = error ? [] : (data || []);
+  }
+
+  function renderConsultoresLista(selecionados){
+    const container = document.getElementById('nova-consultores-lista');
+    if (!consultoresDisponiveis.length) {
+      container.innerHTML = '<div class="consultores-vazio">Nenhum outro consultor cadastrado no sistema ainda.</div>';
+      return;
+    }
+    container.innerHTML = consultoresDisponiveis.map(c => `
+      <label>
+        <input type="checkbox" name="nova-consultor" value="${escapeAttr(c.id)}" ${selecionados.has(c.id) ? 'checked' : ''}>
+        ${escapeAttr(c.nome || c.email)}
+      </label>
+    `).join('');
+  }
+
+  function consultoresSelecionadosNoForm(){
+    return Array.from(document.querySelectorAll('input[name="nova-consultor"]:checked')).map(el => el.value);
+  }
+
+  // list_consultores() traz todo mundo com role='consultor' exceto quem está
+  // chamando (auth.uid()) — então pra resolver o próprio nome usamos o
+  // profile já carregado no boot; pra qualquer outro id, olhamos a lista.
+  function nomeDoConsultor(id){
+    if (id === session.user.id) return meuNome;
+    const c = consultoresDisponiveis.find(c => c.id === id);
+    return (c && (c.nome || c.email)) || 'Consultor';
+  }
+
+  // Alinha assessoria_colaboradores com o que está marcado no form: remove
+  // quem foi desmarcado, adiciona quem foi marcado, não mexe no resto.
+  // `idsGerenciaveis` é o universo de quem tinha checkbox pra ser desmarcado
+  // (consultoresDisponiveis no momento em que o modal foi aberto) — um
+  // vínculo existente cujo id não está nesse universo (ex.: a pessoa deixou
+  // de ser "consultor" e sumiu de list_consultores() nesse meio-tempo) nunca
+  // é removido aqui, porque o usuário não teve chance de vê-lo pra desmarcar.
+  async function sincronizarColaboradores(assessoriaId, colaboradorIds, idsGerenciaveis){
+    const { data: atuais, error: erroLeitura } = await sb.from('assessoria_colaboradores')
+      .select('id, colaborador_id').eq('assessoria_id', assessoriaId);
+    if (erroLeitura) { alert('Não foi possível atualizar os consultores vinculados: ' + erroLeitura.message); return; }
+
+    const atuaisPorConsultor = new Map((atuais || []).map(a => [a.colaborador_id, a.id]));
+    const selecionados = new Set(colaboradorIds);
+    const gerenciaveis = new Set(idsGerenciaveis || []);
+
+    const idsParaRemover = (atuais || []).filter(a => gerenciaveis.has(a.colaborador_id) && !selecionados.has(a.colaborador_id)).map(a => a.id);
+    if (idsParaRemover.length) {
+      const { error } = await sb.from('assessoria_colaboradores').delete().in('id', idsParaRemover);
+      if (error) { alert('Não foi possível remover um consultor vinculado: ' + error.message); return; }
+    }
+
+    const paraAdicionar = colaboradorIds
+      .filter(id => !atuaisPorConsultor.has(id))
+      .map(colaborador_id => ({ assessoria_id: assessoriaId, colaborador_id }));
+    if (paraAdicionar.length) {
+      const { error } = await sb.from('assessoria_colaboradores').insert(paraAdicionar);
+      if (error) { alert('Não foi possível vincular um consultor: ' + error.message); return; }
+    }
+  }
+
+  async function openEditModal(row){
     editingAssessoriaId = row.id;
     document.getElementById('modal-nova-titulo').textContent = 'Editar assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Salvar alterações';
@@ -172,6 +256,9 @@
     document.getElementById('nova-municipio').value = row.municipio || '';
     document.getElementById('nova-proposta').value = row.proposta || '';
     document.getElementById('modal-nova').classList.remove('hidden');
+    await carregarConsultoresDisponiveis();
+    const { data: vinculados } = await sb.from('assessoria_colaboradores').select('colaborador_id').eq('assessoria_id', row.id);
+    renderConsultoresLista(new Set((vinculados || []).map(v => v.colaborador_id)));
   }
 
   function closeNovaModal(){
@@ -179,6 +266,7 @@
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
+    document.getElementById('nova-consultores-lista').innerHTML = '';
     document.getElementById('modal-nova').classList.add('hidden');
   }
 
@@ -188,11 +276,20 @@
     const status = currentStatus(row.data);
     const card = document.createElement('div');
     card.className = 'assessoria-card';
+
+    const colaboradoresIds = colaboradoresPorAssessoria.get(row.id) || [];
+    const participantesIds = [row.owner_id, ...colaboradoresIds];
+    const totalConsultores = participantesIds.length;
+    const badgeConsultores = totalConsultores > 1
+      ? `<span class="consultores-badge" title="Consultores: ${escapeAttr(participantesIds.map(nomeDoConsultor).join(', '))}">👥 ${totalConsultores} consultores</span>`
+      : '';
+
     card.innerHTML = `
       <div>
-        <span class="role-tag">${isOwner ? 'Você é o consultor' : 'Acesso de cliente (somente leitura)'}</span>
-        <h3>${row.nome}</h3>
-        <div class="cliente">${row.cliente_nome || '—'}${row.municipio ? ' · ' + row.municipio : ''}${row.proposta ? ' · Proposta ' + row.proposta : ''}</div>
+        <span class="role-tag">${isOwner ? 'Você é o consultor' : 'Modo de visualização'}</span>
+        <h3>${escapeAttr(row.nome)}</h3>
+        <div class="cliente">${row.cliente_nome ? escapeAttr(row.cliente_nome) : '—'}${row.municipio ? ' · ' + escapeAttr(row.municipio) : ''}${row.proposta ? ' · Proposta ' + escapeAttr(row.proposta) : ''}</div>
+        ${badgeConsultores}
       </div>
       <div>
         <div class="pct-row"><span>Progresso</span><strong>${fmtPct(pct)}%</strong></div>
@@ -214,8 +311,8 @@
         const confirmado = await showActionPanel({
           title: arquivando ? 'Arquivar assessoria?' : 'Desarquivar assessoria?',
           subtitle: arquivando
-            ? `"${row.nome}" sai da lista principal, mas nada é apagado — pode desarquivar quando quiser.`
-            : `"${row.nome}" volta a aparecer na lista principal.`,
+            ? `"${escapeAttr(row.nome)}" sai da lista principal, mas nada é apagado — pode desarquivar quando quiser.`
+            : `"${escapeAttr(row.nome)}" volta a aparecer na lista principal.`,
           actions: [
             { label: arquivando ? 'Arquivar' : 'Desarquivar', style: 'primary', value: 'sim' },
             { label: 'Cancelar', style: 'ghost', value: 'nao' }
@@ -229,7 +326,7 @@
       card.querySelector(`[data-apagar="${row.id}"]`).addEventListener('click', async () => {
         const confirmado = await showActionPanel({
           title: 'Apagar assessoria definitivamente?',
-          subtitle: `"${row.nome}" e todo o histórico de visitas, planejamento e entregáveis serão apagados para sempre. Essa ação não pode ser desfeita. Se não tem certeza, use "Arquivar" em vez disso.`,
+          subtitle: `"${escapeAttr(row.nome)}" e todo o histórico de visitas, planejamento e entregáveis serão apagados para sempre. Essa ação não pode ser desfeita. Se não tem certeza, use "Arquivar" em vez disso.`,
           actions: [
             { label: 'Apagar definitivamente', style: 'danger', value: 'sim' },
             { label: 'Cancelar', style: 'ghost', value: 'nao' }
@@ -255,13 +352,23 @@
     }
     isOwnerOfSomething = data.some(r => r.owner_id === effectiveUserId);
     // Sem nenhuma assessoria ainda não dá pra saber se é o consultor (primeiro acesso)
-    // ou um cliente sem convite — nesse caso deixamos o botão de criar visível também.
+    // ou alguém vinculado a nenhuma assessoria ainda — nesse caso deixamos o botão de
+    // criar visível também.
     btnNova.classList.toggle('hidden', !isOwnerOfSomething && data.length > 0);
+    // SGSET é ação do consultor responsável — nunca do gestor, nem quando
+    // ele está vendo como alguém via ?as= (único jeito de um gestor chegar
+    // nesta página, já que sem ?as= ele é redirecionado pro painel gerencial).
+    document.getElementById('btn-sgset-semanal').classList.toggle('hidden', !isOwnerOfSomething || isGestorUser);
 
-    // Cliente com acesso a exatamente uma assessoria: pula direto pro painel dela.
-    if (!isOwnerOfSomething && data.length === 1) {
-      window.location.href = `dashboard.html?id=${data[0].id}`;
-      return;
+    colaboradoresPorAssessoria = new Map();
+    if (data.length) {
+      const { data: colaboradores } = await sb.from('assessoria_colaboradores')
+        .select('assessoria_id, colaborador_id').in('assessoria_id', data.map(r => r.id));
+      (colaboradores || []).forEach(c => {
+        const lista = colaboradoresPorAssessoria.get(c.assessoria_id) || [];
+        lista.push(c.colaborador_id);
+        colaboradoresPorAssessoria.set(c.assessoria_id, lista);
+      });
     }
 
     const ativas = data.filter(r => r.ativo !== false);
@@ -281,7 +388,7 @@
     if (!listaAtual.length) {
       emptyState.innerHTML = mostrarArquivadas
         ? 'Nenhuma assessoria arquivada.'
-        : 'Nenhuma assessoria encontrada. Clique em "+ Nova assessoria" acima para criar a primeira — ou, se você é cliente, peça ao seu consultor para liberar o acesso usando este mesmo e-mail.';
+        : 'Nenhuma assessoria encontrada. Clique em "+ Nova assessoria" acima para criar a primeira — ou peça para o consultor responsável adicionar você como consultor de uma assessoria existente.';
       emptyState.classList.remove('hidden');
       grid.innerHTML = '';
     } else {
@@ -290,13 +397,20 @@
       listaAtual.forEach(row => grid.appendChild(renderCard(row)));
     }
 
+    const temColaboracao = data.some(r => r.owner_id !== effectiveUserId);
     const calendarioCard = document.getElementById('calendario-card');
-    if (isOwnerOfSomething && !mostrarArquivadas) {
+    if ((isOwnerOfSomething || temColaboracao) && !mostrarArquivadas) {
       ownedAssessoriasSorted = ativas
         .filter(r => r.owner_id === effectiveUserId)
         .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
-      colorMap = new Map(ownedAssessoriasSorted.map((r,i) => [r.id, i]));
       arquivadasParaCalendario = arquivadas.filter(r => r.owner_id === effectiveUserId);
+      // Assessorias em que sou consultor vinculado (não dono): entram no meu
+      // calendário também, mas só com os dias em que apareço em participantes[].
+      colaboracaoAssessoriasSorted = ativas
+        .filter(r => r.owner_id !== effectiveUserId)
+        .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
+      colaboracaoArquivadasParaCalendario = arquivadas.filter(r => r.owner_id !== effectiveUserId);
+      colorMap = new Map([...ownedAssessoriasSorted, ...colaboracaoAssessoriasSorted].map((r,i) => [r.id, i]));
       calendarioCard.classList.remove('hidden');
       const { data: comp } = await sb.from('compensacoes').select('*').eq('owner_id', effectiveUserId);
       compensacoesList = comp || [];
@@ -309,16 +423,98 @@
   }
 
   // ============================================================
+  // SGSET — lote semanal (só assessorias próprias; colaboração é read-only)
+  // ============================================================
+  async function abrirPainelSgset(){
+    if (isGestorUser) return;
+    const grupos = ownedAssessoriasSorted
+      .map(a => ({ assessoria: a, visitas: ((a.data && a.data.visitas) || []).filter(visitaSgsetPendente) }))
+      .filter(g => g.visitas.length)
+      .map(g => ({
+        id: g.assessoria.id,
+        titulo: `${escapeAttr(g.assessoria.nome)}${g.assessoria.cliente_nome ? ' · ' + escapeAttr(g.assessoria.cliente_nome) : ''}`,
+        visitas: g.visitas.map(v => ({ id: v.id, dataISO: v.dataISO, horas: Number(v.horasNoDia || 0) }))
+      }));
+
+    await showSgsetSelecao({
+      titulo: 'Lançamentos SGSET',
+      subtitulo: `Consultor: ${escapeAttr(nomeConsultorAtivo)}`,
+      grupos,
+      onGerar: async ({ totalVisitas, porGrupo }) => {
+        const blocos = porGrupo.map(({ grupoId, visitaIds }) => {
+          const assessoria = ownedAssessoriasSorted.find(a => a.id === grupoId);
+          const todasVisitas = (assessoria.data && assessoria.data.visitas) || [];
+          const selecionadas = todasVisitas.filter(v => visitaIds.includes(v.id));
+          const jaEncaminhadas = todasVisitas
+            .filter(v => !visitaSgsetPendente(v))
+            .reduce((s,v) => s + Number(v.horasNoDia || 0), 0);
+          return {
+            clienteNome: assessoria.cliente_nome,
+            projetoNome: assessoria.nome,
+            proposta: assessoria.proposta,
+            totalPrevisto: (assessoria.data && assessoria.data.totalPrevisto) || 0,
+            horasJaEncaminhadas: jaEncaminhadas,
+            visitas: selecionadas.map(v => ({
+              dataISO: v.dataISO,
+              resumo: v.resumo,
+              participantes: participantesDaVisitaParaTexto(v, assessoria.owner_id, () => nomeConsultorAtivo)
+            }))
+          };
+        });
+
+        const { assunto, corpo } = buildSgsetTexto({ consultorNome: nomeConsultorAtivo, dataGeracao: todayISO(), blocos });
+        const totalHoras = blocos.reduce((s,b) => s + b.visitas.reduce((s2,v) => s2 + v.participantes.reduce((s3,p) => s3 + p.horas, 0), 0), 0);
+
+        await showSgsetResultado({
+          assunto, corpo, totalVisitas, totalHoras,
+          onConfirmarEnvio: async () => {
+            for (const { grupoId, visitaIds } of porGrupo) {
+              const assessoria = ownedAssessoriasSorted.find(a => a.id === grupoId);
+              const novaData = JSON.parse(JSON.stringify(assessoria.data));
+              novaData.visitas = (novaData.visitas || []).map(v => visitaIds.includes(v.id)
+                ? { ...v, sgset: { status:'enviado', enviadoEm: new Date().toISOString(), enviadoPor: { id: session.user.id, nome: meuNome } } }
+                : v);
+              const { data: updated, error } = await sb.from('assessorias')
+                .update({ data: novaData })
+                .eq('id', assessoria.id)
+                .eq('updated_at', assessoria.updated_at)
+                .select('updated_at')
+                .maybeSingle();
+              if (error || !updated) {
+                alert(`Não foi possível marcar "${assessoria.nome}" como encaminhada — ela pode ter sido alterada em outro lugar. Recarregue a página e tente de novo.`);
+                continue;
+              }
+              assessoria.data = novaData;
+              assessoria.updated_at = updated.updated_at;
+            }
+            loadAssessorias();
+          }
+        });
+      }
+    });
+  }
+  document.getElementById('btn-sgset-semanal').addEventListener('click', abrirPainelSgset);
+
+  // ============================================================
   // Banco de horas de deslocamento
   // ============================================================
+  // Deslocamento é um valor único por visita, mas cada participante recebe o
+  // valor integral (não dividido) — quem participou, participou do mesmo
+  // trajeto. Sem participantes (dado antigo), só conta pro dono.
+  function souParticipanteDaVisita(assessoria, v){
+    if (Array.isArray(v.participantes)) return v.participantes.some(p => p.consultorId === effectiveUserId);
+    return assessoria.owner_id === effectiveUserId;
+  }
+
   function computeBancoDeHoras(){
-    const todasAssessorias = [...ownedAssessoriasSorted, ...arquivadasParaCalendario];
+    const todasAssessorias = [...ownedAssessoriasSorted, ...arquivadasParaCalendario, ...colaboracaoAssessoriasSorted, ...colaboracaoArquivadasParaCalendario];
     const hoje = todayISO();
     const mesAtual = hoje.slice(0, 7);
 
     let geradoTotal = 0, geradoMes = 0;
     todasAssessorias.forEach(a => {
       ((a.data && a.data.visitas) || []).forEach(v => {
+        if (!souParticipanteDaVisita(a, v)) return;
         const h = Number(v.deslocamentoHoras || 0);
         if (h > 0) {
           geradoTotal += h;
@@ -338,7 +534,7 @@
     const saldoMes = geradoMes - compensadoMes;
     const saldoAnterior = Math.max(0, saldoTotal - Math.max(0, saldoMes));
 
-    return { geradoMes, compensadoMes, saldoTotal, saldoAnterior, mesAtual };
+    return { geradoMes, geradoTotal, compensadoMes, saldoTotal, saldoAnterior, mesAtual };
   }
 
   function bancoDeHorasNoteHtml(){
@@ -347,7 +543,10 @@
     const nomeMes = MONTH_NAMES[Number(mes) - 1];
     const statusClass = b.saldoTotal <= 0 ? 'banco-ok' : (b.saldoAnterior > 0 ? 'banco-vencido' : 'banco-atencao');
     return `
-      <div class="banco-linha">${nomeMes}/${ano}: gerado ${b.geradoMes}h de deslocamento · compensado ${b.compensadoMes}h</div>
+      <div class="banco-linha">${nomeMes}/${ano}</div>
+      <div class="banco-linha-item">Gerado: ${b.geradoMes}h</div>
+      <div class="banco-linha-item">Compensado: ${b.compensadoMes}h</div>
+      <div class="banco-linha-item">Acumulado: ${b.geradoTotal}h</div>
       <div class="banco-saldo ${statusClass}">Saldo: ${b.saldoTotal}h${b.saldoTotal > 0 ? ' a compensar' : ''}</div>
       ${b.saldoAnterior > 0 ? `<div class="banco-aviso">⚠ ${b.saldoAnterior}h desse saldo vêm de meses anteriores — regularize o quanto antes.</div>` : ''}
     `;
@@ -358,18 +557,40 @@
   // ============================================================
   let ownedAssessoriasSorted = [];
   let arquivadasParaCalendario = [];
+  let colaboracaoAssessoriasSorted = [];
+  let colaboracaoArquivadasParaCalendario = [];
   let colorMap = new Map();
   let compensacoesList = [];
   let feriadosMunicipaisList = [];
   let calendarYear = new Date().getFullYear();
 
+  // Minha fatia (participantes[]) numa entrada de uma assessoria em que sou
+  // consultor vinculado, não dono. Sem "participantes" (dado antigo, ou
+  // assessoria sem consultor extra), a entrada é só do dono — não aparece
+  // pra mim aqui, por isso não tem fallback.
+  function minhaFatia(entrada){
+    if (!Array.isArray(entrada.participantes)) return null;
+    const meu = entrada.participantes.find(p => p.consultorId === effectiveUserId);
+    return meu ? Number(meu.horas || 0) : null;
+  }
+
   function consolidatedDayInfo(iso){
     for (const a of ownedAssessoriasSorted) {
       const d = a.data || {};
       const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-      if (actual > 0) return { assessoria: a, tipo: 'realizada', horas: actual };
+      if (actual > 0) return { assessoria: a, tipo: 'realizada', horas: actual, readonly: false };
       const planejada = (d.visitasPlanejadas||[]).find(p => p.dataISO === iso);
-      if (planejada) return { assessoria: a, tipo: 'planejada', horas: planejada.horas, entrada: planejada };
+      if (planejada) return { assessoria: a, tipo: 'planejada', horas: planejada.horas, entrada: planejada, readonly: false };
+    }
+    for (const a of colaboracaoAssessoriasSorted) {
+      const d = a.data || {};
+      const minhasHoje = (d.visitas || []).filter(v => v.dataISO === iso).map(v => minhaFatia(v)).filter(h => h != null);
+      if (minhasHoje.length) return { assessoria: a, tipo: 'realizada', horas: minhasHoje.reduce((s,h) => s + h, 0), readonly: true };
+      const planejadas = (d.visitasPlanejadas || []).filter(p => p.dataISO === iso);
+      for (const p of planejadas) {
+        const minha = minhaFatia(p);
+        if (minha != null) return { assessoria: a, tipo: 'planejada', horas: minha, entrada: p, readonly: true };
+      }
     }
     return null;
   }
@@ -381,6 +602,11 @@
       const d = a.data || {};
       const actual = (d.visitas||[]).filter(v => v.dataISO === iso).reduce((s,v) => s + Number(v.horasNoDia||0), 0);
       if (actual > 0) return { assessoria: a, horas: actual };
+    }
+    for (const a of colaboracaoArquivadasParaCalendario) {
+      const d = a.data || {};
+      const minhasHoje = (d.visitas || []).filter(v => v.dataISO === iso).map(v => minhaFatia(v)).filter(h => h != null);
+      if (minhasHoje.length) return { assessoria: a, horas: minhasHoje.reduce((s,h) => s + h, 0) };
     }
     return null;
   }
@@ -434,7 +660,7 @@
         cls += ' cal-arquivada';
         title = `Encerrada: ${arquivada.assessoria.nome} — ${arquivada.horas}h (arquivada)`;
       }
-      return `<div class="${cls}" ${style} data-date="${iso}" data-clickable title="${escapeAttr(title)}">${d}</div>`;
+      return `<div class="${cls}" ${style} data-date="${iso}" data-clickable role="button" tabindex="0" title="${escapeAttr(title)}">${d}</div>`;
     }).join('');
     return `<div class="cal-month">
         <div class="cal-month-title">${MONTH_NAMES[month]} ${year}</div>
@@ -446,16 +672,19 @@
   function renderCalendario(){
     document.getElementById('ano-atual-label').textContent = calendarYear;
     const legenda = document.getElementById('calendario-legenda');
-    legenda.innerHTML = ownedAssessoriasSorted.map((a,i) => `<span><i style="background:${colorForIndex(i)}"></i>${a.nome}</span>`).join('')
-      + `<span><i style="background:#ede9fe"></i>Compensação</span>`
+    legenda.innerHTML = [...ownedAssessoriasSorted, ...colaboracaoAssessoriasSorted].map(a => `<span><i style="background:${colorForIndex(colorMap.get(a.id) || 0)}"></i>${escapeAttr(a.nome)}${a.cliente_nome ? ' – ' + escapeAttr(a.cliente_nome) : ''}</span>`).join('')
+      + `<span><i style="background:var(--compbg)"></i>Compensação</span>`
       + `<span><i style="background:#fef3c7"></i>Feriado</span>`
-      + (arquivadasParaCalendario.length ? `<span><i style="background:#e2e8f0"></i>Encerrada (arquivada)</span>` : '');
+      + ((arquivadasParaCalendario.length || colaboracaoArquivadasParaCalendario.length) ? `<span><i style="background:#e2e8f0"></i>Encerrada (arquivada)</span>` : '');
     const meses = document.getElementById('calendario-meses');
     let html = '';
     for (let m = 0; m < 12; m++) html += renderMesConsolidado(calendarYear, m);
     meses.innerHTML = html;
     meses.querySelectorAll('[data-date]').forEach(el => {
       el.addEventListener('click', () => onCalendarioClick(el.dataset.date));
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onCalendarioClick(el.dataset.date); }
+      });
     });
   }
 
@@ -465,7 +694,7 @@
       if (info.tipo === 'realizada') {
         const result = await showActionPanel({
           title: fmtDateBR(iso),
-          subtitle: `"${info.assessoria.nome}" já tem uma visita registrada nesse dia (${info.horas}h).`,
+          subtitle: `"${escapeAttr(info.assessoria.nome)}" já tem uma visita registrada nesse dia (${info.horas}h).`,
           actions: [
             { label:'Abrir essa assessoria', style:'primary', value:'abrir' },
             { label:'Fechar', style:'ghost', value:'fechar' }
@@ -475,9 +704,23 @@
         return;
       }
       // planejada, ainda não realizada
+      if (info.readonly) {
+        // Assessoria em que sou consultor vinculado, não dono — só leitura,
+        // sem opção de reagendar/remover (isso é decisão de quem criou a assessoria).
+        const result = await showActionPanel({
+          title: fmtDateBR(iso),
+          subtitle: `"${escapeAttr(info.assessoria.nome)}" está planejada para esse dia (${info.horas}h).`,
+          actions: [
+            { label:'Abrir essa assessoria', style:'primary', value:'abrir' },
+            { label:'Fechar', style:'ghost', value:'fechar' }
+          ]
+        });
+        if (result && result.action === 'abrir') window.location.href = `dashboard.html?id=${info.assessoria.id}`;
+        return;
+      }
       const result = await showActionPanel({
         title: fmtDateBR(iso),
-        subtitle: `"${info.assessoria.nome}" está planejada para esse dia (${info.horas}h).`,
+        subtitle: `"${escapeAttr(info.assessoria.nome)}" está planejada para esse dia (${info.horas}h).`,
         actions: [
           { label:'Reagendar para outra data', style:'primary', value:'reagendar' },
           { label:'Remover planejamento', style:'danger', value:'remover' },
@@ -491,7 +734,7 @@
       }
       const confirmado = await showActionPanel({
         title: 'Remover planejamento?',
-        subtitle: `${fmtDateBR(iso)} · "${info.assessoria.nome}" · ${info.horas}h`,
+        subtitle: `${fmtDateBR(iso)} · "${escapeAttr(info.assessoria.nome)}" · ${info.horas}h`,
         actions: [
           { label:'Remover', style:'danger', value:'sim' },
           { label:'Cancelar', style:'ghost', value:'nao' }
@@ -504,7 +747,7 @@
     if (comp) {
       const confirmado = await showActionPanel({
         title: 'Remover compensação?',
-        subtitle: `${fmtDateBR(iso)} · ${comp.horas || 8}h${comp.motivo ? ' — ' + comp.motivo : ''}`,
+        subtitle: `${fmtDateBR(iso)} · ${comp.horas || 8}h${comp.motivo ? ' — ' + escapeAttr(comp.motivo) : ''}`,
         actions: [
           { label:'Remover', style:'danger', value:'sim' },
           { label:'Cancelar', style:'ghost', value:'nao' }
@@ -529,7 +772,7 @@
       }
       const confirmado = await showActionPanel({
         title: 'Remover feriado municipal?',
-        subtitle: `${fmtDateBR(iso)} — ${feriado.nome}`,
+        subtitle: `${fmtDateBR(iso)} — ${escapeAttr(feriado.nome)}`,
         actions: [
           { label:'Remover', style:'danger', value:'sim' },
           { label:'Cancelar', style:'ghost', value:'nao' }
@@ -546,7 +789,7 @@
     if (arquivada) {
       const result = await showActionPanel({
         title: fmtDateBR(iso),
-        subtitle: `"${arquivada.assessoria.nome}" (arquivada) — ${arquivada.horas}h registradas nesse dia.`,
+        subtitle: `"${escapeAttr(arquivada.assessoria.nome)}" (arquivada) — ${arquivada.horas}h registradas nesse dia.`,
         actions: [
           { label:'Abrir essa assessoria', style:'primary', value:'abrir' },
           { label:'Fechar', style:'ghost', value:'fechar' }
@@ -632,7 +875,7 @@
   async function reagendarEntradaPainel(assessoria, entrada, deISO){
     const result = await showActionPanel({
       title: 'Reagendar visita',
-      subtitle: `"${assessoria.nome}" · de ${fmtDateBR(deISO)} · ${entrada.horas}h`,
+      subtitle: `"${escapeAttr(assessoria.nome)}" · de ${fmtDateBR(deISO)} · ${entrada.horas}h`,
       fields: [{ id:'data', label:'Nova data', type:'text', value: fmtDateBR(deISO), placeholder:'DD/MM/AAAA' }],
       actions: [
         { label:'Reagendar', style:'primary', value:'ok' },
@@ -684,63 +927,77 @@
   document.getElementById('btn-ano-anterior').addEventListener('click', () => { calendarYear--; renderCalendario(); });
   document.getElementById('btn-ano-seguinte').addEventListener('click', () => { calendarYear++; renderCalendario(); });
 
-  document.getElementById('btn-banco-horas').addEventListener('click', () => {
-    onCalendarioClick(todayISO());
-  });
-
   document.getElementById('btn-ver-arquivadas').addEventListener('click', () => {
     mostrarArquivadas = !mostrarArquivadas;
     loadAssessorias();
   });
 
-  document.getElementById('btn-nova').addEventListener('click', () => {
+  document.getElementById('btn-nova').addEventListener('click', async () => {
     editingAssessoriaId = null;
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
     document.getElementById('modal-nova').classList.remove('hidden');
+    await carregarConsultoresDisponiveis();
+    renderConsultoresLista(new Set());
   });
   document.getElementById('btn-cancelar-nova').addEventListener('click', closeNovaModal);
   document.getElementById('form-nova').addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    const btnSalvar = document.getElementById('btn-salvar-nova');
+    if (btnSalvar.disabled) return;
     const nome = document.getElementById('nova-nome').value.trim();
     const cliente_nome = document.getElementById('nova-cliente').value.trim();
     const municipio = document.getElementById('nova-municipio').value.trim();
     const proposta = document.getElementById('nova-proposta').value.trim();
+    const consultoresIds = consultoresSelecionadosNoForm();
+    const consultoresGerenciaveisIds = consultoresDisponiveis.map(c => c.id);
 
-    if (editingAssessoriaId) {
-      const { error } = await sb.from('assessorias').update({
+    btnSalvar.disabled = true;
+    try {
+      if (editingAssessoriaId) {
+        const { error } = await sb.from('assessorias').update({
+          nome,
+          cliente_nome: cliente_nome || null,
+          municipio: municipio || null,
+          proposta: proposta || null
+        }).eq('id', editingAssessoriaId);
+        if (error) { alert('Não foi possível salvar as alterações: ' + error.message); return; }
+        await sincronizarColaboradores(editingAssessoriaId, consultoresIds, consultoresGerenciaveisIds);
+        closeNovaModal();
+        loadAssessorias();
+        return;
+      }
+
+      const { data, error } = await sb.from('assessorias').insert({
+        owner_id: effectiveUserId,
         nome,
         cliente_nome: cliente_nome || null,
         municipio: municipio || null,
-        proposta: proposta || null
-      }).eq('id', editingAssessoriaId);
-      if (error) { alert('Não foi possível salvar as alterações: ' + error.message); return; }
-      closeNovaModal();
-      loadAssessorias();
+        proposta: proposta || null,
+        data: defaultState()
+      }).select().single();
+      if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
+      await sincronizarColaboradores(data.id, consultoresIds, consultoresGerenciaveisIds);
+      document.getElementById('modal-nova').classList.add('hidden');
+      document.getElementById('form-nova').reset();
+      window.location.href = `dashboard.html?id=${data.id}`;
       return;
+    } finally {
+      btnSalvar.disabled = false;
     }
-
-    const { data, error } = await sb.from('assessorias').insert({
-      owner_id: effectiveUserId,
-      nome,
-      cliente_nome: cliente_nome || null,
-      municipio: municipio || null,
-      proposta: proposta || null,
-      data: defaultState()
-    }).select().single();
-    if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
-    document.getElementById('modal-nova').classList.add('hidden');
-    document.getElementById('form-nova').reset();
-    window.location.href = `dashboard.html?id=${data.id}`;
   });
+
+  emptyState.textContent = 'Carregando suas assessorias…';
+  emptyState.classList.remove('hidden');
 
   (async () => {
     session = await requireSession();
     if (!session) return;
 
-    const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+    const { data: perfil } = await sb.from('profiles').select('role,nome,email').eq('id', session.user.id).maybeSingle();
     isGestorUser = Boolean(perfil && perfil.role === 'gestor');
+    meuNome = (perfil && (perfil.nome || perfil.email)) || session.user.email;
 
     const params = new URLSearchParams(window.location.search);
     viewAsId = params.get('as');
@@ -756,14 +1013,17 @@
     if (viewAsId) {
       const { data: perfilConsultor } = await sb.from('profiles').select('nome,email').eq('id', viewAsId).maybeSingle();
       const nomeConsultor = (perfilConsultor && (perfilConsultor.nome || perfilConsultor.email)) || 'consultor';
+      nomeConsultorAtivo = nomeConsultor;
       document.getElementById('page-title').textContent = `Assessorias de ${nomeConsultor}`;
       document.getElementById('user-email').textContent = `Visualizando como gestor · ${session.user.email}`;
       document.getElementById('btn-voltar-gestor').classList.remove('hidden');
     } else {
+      nomeConsultorAtivo = meuNome;
       document.getElementById('user-email').textContent = session.user.email;
     }
 
-    loadAssessorias();
+    await carregarConsultoresDisponiveis();
+    await loadAssessorias();
   })();
 </script>
 </body>

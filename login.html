@@ -18,6 +18,8 @@
   .tab-btn.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .btn-block{width:100%;justify-content:center;padding:11px}
   .ok-box{background:var(--greenbg);color:var(--green);border:1px solid #cfe6d1;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+  .forgot-link{display:block;text-align:right;font-size:11.5px;color:var(--blue);margin-top:6px;text-decoration:none}
+  .forgot-link:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -42,12 +44,13 @@
       <div class="field">
         <label for="senha">Senha</label>
         <input type="password" id="senha" name="senha" required autocomplete="current-password" minlength="6">
+        <a href="#" id="link-esqueci-senha" class="forgot-link">Esqueci minha senha</a>
       </div>
       <button type="submit" class="btn btn-primary btn-block" id="btn-submit">Entrar</button>
     </form>
     <div id="msg-area"></div>
     <div class="sub-login" id="hint-text" style="margin-top:14px">
-      Já é consultor? Use "Entrar". Se você é cliente e recebeu acesso a uma assessoria, crie sua conta com o mesmo e-mail para o qual o convite foi feito.
+      Já possui uma conta? Use "Entrar". Para um novo acesso, use "Criar conta".
     </div>
   </div>
 </div>
@@ -62,6 +65,7 @@
   const msgArea = document.getElementById('msg-area');
   const tabEntrar = document.getElementById('tab-entrar');
   const tabCriar = document.getElementById('tab-criar');
+  const linkEsqueciSenha = document.getElementById('link-esqueci-senha');
   let mode = 'entrar';
 
   function setMode(next){
@@ -69,6 +73,7 @@
     tabEntrar.classList.toggle('active', mode === 'entrar');
     tabCriar.classList.toggle('active', mode === 'criar');
     btnSubmit.textContent = mode === 'entrar' ? 'Entrar' : 'Criar conta';
+    linkEsqueciSenha.classList.toggle('hidden', mode !== 'entrar');
     msgArea.innerHTML = '';
   }
   tabEntrar.addEventListener('click', () => setMode('entrar'));
@@ -86,6 +91,35 @@
     const { data: { session } } = await sb.auth.getSession();
     if (session) window.location.href = 'painel.html';
   })();
+
+  // Mecanismo oficial do Supabase Auth (resetPasswordForEmail) — sem
+  // sistema próprio de recuperação. A resposta é a mesma independente de o
+  // e-mail existir ou não (é assim que o Supabase evita enumeração de
+  // contas), então a mensagem de sucesso é sempre genérica.
+  let enviandoRecuperacao = false;
+  linkEsqueciSenha.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    if (enviandoRecuperacao) return;
+    msgArea.innerHTML = '';
+    const email = document.getElementById('email').value.trim();
+    if (!email) {
+      showError('Informe seu e-mail no campo acima para recuperar a senha.');
+      document.getElementById('email').focus();
+      return;
+    }
+    enviandoRecuperacao = true;
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/redefinir-senha.html'
+      });
+      if (error) throw error;
+      showOk('Se esse e-mail estiver cadastrado, você vai receber um link de recuperação em instantes. Verifique também a caixa de spam.');
+    } catch (err) {
+      showError(err.message || 'Não foi possível solicitar a recuperação agora. Tente novamente em instantes.');
+    } finally {
+      enviandoRecuperacao = false;
+    }
+  });
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();

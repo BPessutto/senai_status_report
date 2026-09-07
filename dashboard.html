@@ -8,6 +8,7 @@
 :root{
   --navy:#17365d; --blue:#2f75b5; --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#64748b; --border:#d9e2ec;
   --green:#2e7d32; --greenbg:#e8f5e9; --amber:#9a6700; --amberbg:#fff7d6; --purple:#6941c6; --purplebg:#f4f3ff;
+  --comp:#6d28d9; --compbg:#ede9fe;
   --danger:#b42318;
   --shadow:0 7px 22px rgba(15,23,42,.07); --radius:12px; --radius-sm:8px; --radius-pill:999px;
 }
@@ -24,7 +25,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color
 .back-link:hover{text-decoration:underline}
 .role-badge{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:4px 9px;border-radius:var(--radius-pill)}
 .role-badge.owner{color:var(--blue);background:#eaf2fb}
-.role-badge.client{color:var(--purple);background:var(--purplebg)}
+.role-badge.readonly{color:var(--purple);background:var(--purplebg)}
 .save-status{font-size:11px;color:var(--muted)}
 .session-email{font-size:11.5px;color:var(--muted)}
 .btn-xs{padding:6px 10px;font-size:11px}
@@ -44,7 +45,6 @@ header{
 .logo-cliente img{height:44px;max-width:120px}
 .title-block{text-align:center;min-width:0}
 @media(max-width:640px){.top{grid-template-columns:1fr}.logo-group-right{justify-self:start}}
-.eyebrow{font-size:11px;letter-spacing:1.5px;color:#c7d9ee;font-weight:700;margin-bottom:4px}
 h1{margin:0;font-size:22px;font-weight:800}
 .sub{font-size:12px;color:#dbeafe;margin-top:6px}
 .header-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
@@ -58,8 +58,9 @@ h1{margin:0;font-size:22px;font-weight:800}
 .btn-primary{background:var(--blue);color:#fff}
 .btn-ghost{background:#eaf2f8;color:var(--navy)}
 
-.kpi-row{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:12px;margin-top:16px}
-.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px}
+.kpi-row{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:14px;margin-top:16px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px}
+.kpi:not(.gauge-kpi){display:flex;flex-direction:column;justify-content:center}
 .prazos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
 .prazo-item{border-radius:var(--radius-sm);padding:11px 13px;border:1px solid var(--border)}
 .prazo-item .prazo-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
@@ -77,10 +78,11 @@ h1{margin:0;font-size:22px;font-weight:800}
 .prazo-atencao .prazo-data,.prazo-atencao .prazo-msg,.prazo-atencao .prazo-data-input,.prazo-atencao .prazo-destaque{color:var(--amber)}
 .prazo-vencido{background:#fde2e1;border-color:transparent}
 .prazo-vencido .prazo-data,.prazo-vencido .prazo-msg,.prazo-vencido .prazo-data-input,.prazo-vencido .prazo-destaque{color:var(--danger)}
-.kpi small{display:block;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
-.kpi strong{font-size:24px;color:var(--navy);font-variant-numeric:tabular-nums}
-.kpi .note{font-size:11px;color:var(--muted);margin-top:5px}
-.gauge-kpi{display:flex;align-items:center;gap:14px}
+.kpi small{display:block;font-size:11px;color:var(--navy);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px}
+.kpi strong{font-size:26px;line-height:1.15;color:var(--navy);font-variant-numeric:tabular-nums}
+.kpi .note{display:block;font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}
+#kpi-status-badge{margin-bottom:4px}
+.gauge-kpi{display:flex;align-items:center;gap:18px}
 .gauge-kpi svg{flex-shrink:0}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-top:14px}
@@ -92,13 +94,20 @@ h1{margin:0;font-size:22px;font-weight:800}
 .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .field{display:flex;flex-direction:column}
 .field.span-3{grid-column:span 3}
-.field label{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.field label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
 .field input, .field select, .field textarea{
   border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13px;color:var(--text);background:#fff;
 }
 .field textarea{resize:vertical;min-height:90px}
 .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.12)}
 .field input[readonly]{background:#eef3f8;color:var(--navy);font-weight:800;cursor:not-allowed}
+.participante-visita-linha{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+.participante-visita-linha:last-child{border-bottom:none}
+.participante-visita-linha label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--text);cursor:pointer}
+.participante-visita-linha input[type="checkbox"]{width:16px;height:16px}
+.participante-visita-linha input[type="number"]{width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;text-align:right}
+.participante-visita-linha input[type="number"]:disabled{background:#f4f7fb;color:#94a3b8}
+.participantes-visita-total{margin-top:6px;font-size:12px;font-weight:700;color:var(--navy)}
 .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .form-subblock{grid-column:span 3;border-top:1px dashed var(--border);margin-top:4px;padding-top:14px}
 .form-subblock-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
@@ -114,7 +123,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .stage-main{flex:1;min-width:0}
 .stage-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px}
 .stage-name{font-weight:700;font-size:14px;color:var(--text)}
-.badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:var(--radius-pill);letter-spacing:.3px;white-space:nowrap}
+.badge{font-size:11px;font-weight:800;padding:4px 9px;border-radius:var(--radius-pill);letter-spacing:.3px;white-space:nowrap}
 .stage-bar-track{height:9px;background:#eef1f5;border-radius:var(--radius-pill);overflow:hidden}
 .stage-bar-fill{height:100%;background:var(--blue);border-radius:var(--radius-pill)}
 .stage-meta{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums}
@@ -185,6 +194,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .visit-time{font-size:10.5px;color:var(--muted);margin-bottom:6px}
 .visit-card .tag-row{justify-content:center;margin-bottom:5px}
 .visit-acc{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.visit-acc-total{font-weight:800;color:var(--navy)}
 
 .archive-card{display:grid;grid-template-columns:200px 1fr;gap:16px;border-top:1px solid var(--border);padding:16px 0}
 .archive-card:first-child{border-top:none;padding-top:0}
@@ -197,6 +207,12 @@ h1{margin:0;font-size:22px;font-weight:800}
 .link-btn{border:0;background:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:0}
 .link-btn:hover{text-decoration:underline}
 .link-btn-danger{color:var(--danger)}
+.link-btn-sgset-ok{color:var(--green)}
+.sgset-status{display:inline-block;font-size:10.5px;font-weight:800;margin-top:8px}
+.sgset-status.sgset-pendente{color:var(--muted)}
+.sgset-status.sgset-ok{color:var(--green)}
+.archive-select-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;cursor:pointer}
+.archive-select-check input{width:15px;height:15px}
 .archive-text p{font-size:13px;line-height:1.6;margin:0 0 10px;color:#222}
 .archive-text p:last-child{margin-bottom:0}
 .archive-latest{background:#f3f8fd;border-radius:var(--radius-sm);margin:0 -10px;padding:16px 10px !important}
@@ -225,17 +241,17 @@ h1{margin:0;font-size:22px;font-weight:800}
   .print-title .sub{font-size:11px;color:var(--muted);margin-top:4px}
   .print-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
   .print-kpi{border:1px solid var(--border);border-radius:8px;padding:9px 11px}
-  .print-kpi small{display:block;font-size:8.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+  .print-kpi small{display:block;font-size:9.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
   .print-kpi strong{font-size:17px;color:var(--navy);display:block;line-height:1.2}
-  .print-kpi span{font-size:9px;color:var(--muted)}
+  .print-kpi span{font-size:9.5px;color:var(--muted)}
   .print-kpi-progress{display:flex;align-items:center;gap:9px;padding:7px 10px}
   .print-kpi-progress svg{width:48px;height:48px;flex:0 0 48px}
   .print-kpi-progress small{margin-bottom:2px}
   .print-kpi-progress strong{font-size:18px}
   .print-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 18px}
   .print-chart-box{border:1px solid var(--border);border-radius:8px;padding:10px 12px}
-  .print-chart-title{font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
-  .print-legend{display:flex;gap:12px;margin-top:4px;font-size:9px;color:var(--muted)}
+  .print-chart-title{font-size:10.5px;font-weight:800;color:var(--navy);margin-bottom:6px}
+  .print-legend{display:flex;gap:12px;margin-top:4px;font-size:9.5px;color:var(--muted)}
   .print-legend span{display:inline-flex;align-items:center;gap:4px}
   .print-legend i{width:7px;height:7px;border-radius:2px;display:inline-block}
   .print-stage-gauges{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;min-height:210px;margin-top:2px}
@@ -243,26 +259,26 @@ h1{margin:0;font-size:22px;font-weight:800}
   .print-stage-gauge:nth-child(odd){border-right:1px solid #edf1f6}
   .print-stage-gauge:nth-child(-n+2){border-bottom:1px solid #edf1f6}
   .print-stage-gauge svg{width:72px;height:72px;flex:0 0 72px}
-  .print-stage-gauge-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.25px;white-space:nowrap}
+  .print-stage-gauge-label{font-size:9.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.25px;white-space:nowrap}
   .print-stage-gauge-value{font-size:18px;line-height:1.05;font-weight:800;color:var(--navy);margin-top:3px;font-variant-numeric:tabular-nums}
-  .print-stage-gauge-hours{font-size:8.5px;color:var(--muted);margin-top:3px;white-space:nowrap}
+  .print-stage-gauge-hours{font-size:9.5px;color:var(--muted);margin-top:3px;white-space:nowrap}
   table.print-table{width:100%;border-collapse:collapse;margin:14px 0 22px;font-size:11px}
   table.print-table th, table.print-table td{border:1px solid var(--border);padding:6px 8px;text-align:center}
-  table.print-table th{background:#eef1f5;color:var(--navy);font-size:10px;text-transform:uppercase}
+  table.print-table th{background:#eef1f5;color:var(--navy);font-size:11px;font-weight:800;text-transform:uppercase}
   .print-visit{border-top:1px solid var(--border);padding:12px 0}
   .print-visit h3{margin:0 0 4px;font-size:13px;color:var(--navy)}
-  .print-visit-meta{font-size:10.5px;color:var(--muted);margin-bottom:8px}
+  .print-visit-meta{font-size:11px;color:var(--muted);margin-bottom:8px}
   .print-visit p{font-size:12px;line-height:1.6;margin:0 0 8px;color:#222}
   .print-stage-section{margin:0 0 18px}
   .print-section-title{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin:0 0 8px}
   .print-stage-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
   .print-stage-card{border:1px solid var(--border);border-radius:8px;padding:9px 10px;break-inside:avoid}
   .print-stage-card h3{font-size:11px;color:var(--navy);margin:0 0 5px}
-  .print-stage-metrics{font-size:9.5px;color:var(--muted);margin-bottom:6px}
-  .print-deliverables{margin:6px 0 0;padding-left:16px;font-size:9.5px;line-height:1.45}
+  .print-stage-metrics{font-size:10px;color:var(--muted);margin-bottom:6px}
+  .print-deliverables{margin:6px 0 0;padding-left:16px;font-size:10px;line-height:1.45}
   .print-deliverables li.done{color:var(--green)}
   .print-deliverables li.pending{color:#475569}
-  .print-footer{margin-top:18px;font-size:10px;color:var(--muted);text-align:right}
+  .print-footer{margin-top:18px;font-size:10.5px;color:var(--muted);text-align:right}
 }
 #print-report{display:none}
 
@@ -278,7 +294,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .plan-legend i.dot-divergente{background:var(--amberbg)}
 .plan-legend i.dot-atrasada{background:#fde2e1}
 .plan-legend i.dot-ocupada{background:#e2e8f0}
-.plan-legend i.dot-compensacao{background:#ede9fe}
+.plan-legend i.dot-compensacao{background:var(--compbg)}
 .plan-legend i.dot-feriado{background:#fef3c7}
 .plan-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eaf2fb;border:1px solid #bfd3e5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);font-weight:700}
 .btn-xs{padding:6px 10px;font-size:11px}
@@ -299,7 +315,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .cal-divergente{background:var(--amberbg);color:var(--amber);font-weight:700;cursor:pointer}
 .cal-atrasada{background:#fde2e1;color:var(--danger);font-weight:700;cursor:pointer}
 .cal-ocupada{background:#e2e8f0;color:#475569;cursor:not-allowed;font-weight:700}
-.cal-compensacao{background:#ede9fe;color:#6d28d9;cursor:not-allowed;font-weight:700}
+.cal-compensacao{background:var(--compbg);color:var(--comp);cursor:not-allowed;font-weight:700}
 .cal-feriado{background:#fef3c7;color:#92400e;cursor:not-allowed;font-weight:700}
 .cal-selected{box-shadow:inset 0 0 0 2px var(--blue)}
 .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
@@ -328,7 +344,6 @@ h1{margin:0;font-size:22px;font-weight:800}
         <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
       </div>
       <div class="title-block">
-        <div class="eyebrow">STATUS REPORT · ACOMPANHAMENTO DE CONSULTORIA</div>
         <h1 id="header-title">—</h1>
         <div class="sub" id="header-sub">—</div>
       </div>
@@ -363,9 +378,9 @@ h1{margin:0;font-size:22px;font-weight:800}
 
   <div class="kpi-row no-print">
     <div class="kpi gauge-kpi">
-      <svg width="72" height="72" viewBox="0 0 160 160">
-        <circle cx="80" cy="80" r="68" fill="none" stroke="#e5ebf3" stroke-width="12"/>
-        <circle id="gauge-fill" cx="80" cy="80" r="68" fill="none" stroke="var(--blue)" stroke-width="12"
+      <svg width="84" height="84" viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r="68" fill="none" stroke="#e5ebf3" stroke-width="16"/>
+        <circle id="gauge-fill" cx="80" cy="80" r="68" fill="none" stroke="var(--blue)" stroke-width="16"
           stroke-linecap="round" transform="rotate(-90 80 80)"/>
       </svg>
       <div>
@@ -375,11 +390,13 @@ h1{margin:0;font-size:22px;font-weight:800}
     </div>
     <div class="kpi">
       <small>HORAS REALIZADAS</small>
-      <strong id="kpi-horas-real">—</strong> <span class="note" id="kpi-horas-note"></span>
+      <strong id="kpi-horas-real">—</strong>
+      <span class="note" id="kpi-horas-note"></span>
     </div>
     <div class="kpi">
       <small>ETAPA ATUAL</small>
-      <strong id="kpi-etapa-atual">—</strong> <span class="note" id="kpi-etapa-nome"></span>
+      <strong id="kpi-etapa-atual">—</strong>
+      <span class="note" id="kpi-etapa-nome"></span>
     </div>
     <div class="kpi">
       <small>STATUS DO PROJETO</small>
@@ -420,6 +437,11 @@ h1{margin:0;font-size:22px;font-weight:800}
         <div class="field">
           <label for="field-deslocamento" title="Fica fora da carga horária da assessoria — vai pro banco de horas de deslocamento">Horas de deslocamento nesta visita (opcional, até 2h)</label>
           <input type="number" id="field-deslocamento" name="deslocamentoHoras" min="0" max="2" step="0.5" placeholder="0">
+        </div>
+        <div class="field span-3 hidden" id="participantes-visita-wrap">
+          <label>Consultores participantes</label>
+          <div id="participantes-visita-lista"></div>
+          <div class="participantes-visita-total" id="participantes-visita-total"></div>
         </div>
         <div class="field">
           <label for="field-etapa">Etapa em foco</label>
@@ -521,6 +543,7 @@ h1{margin:0;font-size:22px;font-weight:800}
     <div id="plan-bulk-bar" class="plan-bulk-bar hidden">
       <span id="plan-bulk-count">0 dia(s) selecionado(s)</span>
       <button type="button" class="btn btn-xs" id="btn-bulk-horas">Definir horas</button>
+      <button type="button" class="btn btn-xs hidden" id="btn-bulk-participantes">Editar participantes</button>
       <button type="button" class="btn btn-xs" id="btn-bulk-dia-semana">Mudar dia da semana</button>
       <button type="button" class="btn btn-xs btn-danger" id="btn-bulk-excluir">Excluir selecionados</button>
       <button type="button" class="btn btn-xs" id="btn-bulk-cancelar">Cancelar seleção</button>
@@ -545,7 +568,15 @@ h1{margin:0;font-size:22px;font-weight:800}
   </div>
 
   <div class="card no-print">
-    <div class="card-title">Histórico de visitas</div>
+    <div class="card-title">
+      <span>Histórico de visitas</span>
+      <button type="button" class="btn btn-xs hidden" id="btn-selecionar-sgset">☑ Selecionar para SGSET</button>
+    </div>
+    <div id="archive-bulk-bar" class="plan-bulk-bar hidden">
+      <span id="archive-bulk-count">0 visita(s) selecionada(s)</span>
+      <button type="button" class="btn btn-xs btn-primary" id="btn-archive-gerar-sgset">Gerar SGSET</button>
+      <button type="button" class="btn btn-xs" id="btn-archive-cancelar-sgset">Cancelar</button>
+    </div>
     <div id="archive-list"></div>
   </div>
 
@@ -589,9 +620,10 @@ h1{margin:0;font-size:22px;font-weight:800}
 <script type="module">
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
-import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS } from './js/stage-template.js';
+import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS, PROGRAM_CONFIG } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap, addDaysISO, diffDaysISO } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
+import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado } from './js/sgset.js';
 
 document.getElementById('btn-logout').addEventListener('click', logout);
 
@@ -604,9 +636,16 @@ if (!assessoriaId) {
 let session = null;
 let assessoriaRow = null;
 let isOwner = false;
+// isOwner inclui gestor (comportamento pré-existente, fora do escopo do
+// SGSET). SGSET é ação exclusiva do dono de fato — usa isRealOwner, nunca
+// isOwner, pra gerar/marcar/reabrir.
+let isRealOwner = false;
 let isGestorUser = false;
 let state = null;
 let editingId = null;
+let meuNome = '';
+let colaboradoresDaAssessoria = [];
+let consultoresParaPlanejamento = [];
 const expandedStages = new Set();
 const editingDeliverables = new Set();
 
@@ -683,16 +722,46 @@ function etapaIdsOf(v){
 function tagRowHtml(ids){
   return `<div class="tag-row">${ids.map(id => `<span class="tag">${etapaLabel(id)}</span>`).join('')}</div>`;
 }
+// list_consultores() traz todo mundo com role='consultor' exceto quem está
+// chamando (auth.uid()) — pra resolver o próprio nome usamos o profile já
+// carregado no boot; pra qualquer outro id (dono real ou colaborador),
+// olhamos a lista.
+function nomeDoConsultor(id){
+  if (id === session.user.id) return meuNome;
+  const c = consultoresParaPlanejamento.find(c => c.id === id);
+  return (c && (c.nome || c.email)) || 'Consultor';
+}
+// Opções pro checklist "Consultores participantes" ao planejar/registrar uma
+// visita: o dono real da assessoria + cada consultor vinculado.
+function participantesOptions(){
+  const ids = [assessoriaRow.owner_id, ...colaboradoresDaAssessoria];
+  return ids.map(id => ({ id, nome: nomeDoConsultor(id) }));
+}
 function etapaAllocationJoined(v){
   const snapshots = v.etapaSnapshots || {};
   return etapaIdsOf(v).map(id => `${etapaLabel(id)}: ${Number(snapshots[id] && snapshots[id].horas || 0)}h`).join(' + ');
+}
+
+// Programa MOVER (ETAPA 1 — fundação estrutural): qual template de fases
+// usar pra reconstruir state.etapas. programa ausente/'BP' continua usando
+// STAGE_DEFINITIONS exatamente como sempre — nenhuma mudança de
+// comportamento pro B+P. Uma assessoria MOVER com carga_contratada inválida
+// nunca cai de volta no B+P silenciosamente: lança erro (o boot() já barra
+// isso antes de chegar aqui, mostrando um alerta em vez de renderizar um
+// dashboard com dados errados).
+function stageTemplateAtivo(){
+  const programa = assessoriaRow.programa || 'BP';
+  if(programa !== 'MOVER') return STAGE_DEFINITIONS;
+  const modalidade = PROGRAM_CONFIG.MOVER.modalidades[assessoriaRow.carga_contratada];
+  if(!modalidade) throw new Error(`Assessoria MOVER com carga_contratada inválida: ${assessoriaRow.carga_contratada}`);
+  return modalidade.etapas.map(e => ({ ...e, entregaveis: [] }));
 }
 
 function ensureProjectSchema(){
   const previousStages = Array.isArray(state.etapas) ? state.etapas : [];
   const previousVersion = Number(state.schemaVersion || 0);
   const isLegacyStageSchema = previousVersion < 3;
-  state.etapas = STAGE_DEFINITIONS.map(def => {
+  state.etapas = stageTemplateAtivo().map(def => {
     const old = previousStages.find(e => e.id === def.id) || {};
     const hasSavedDeliverables = previousVersion >= 3 && Array.isArray(old.entregaveis);
     const oldDeliverables = Array.isArray(old.entregaveis) ? old.entregaveis : [];
@@ -774,8 +843,8 @@ function renderKPIs(){
   gauge.setAttribute('stroke-dasharray', CIRC.toFixed(2));
   gauge.setAttribute('stroke-dashoffset', (CIRC*(1-Math.max(0,Math.min(1,totalPct)))).toFixed(2));
   document.getElementById('kpi-progress-value').textContent = fmtPct(totalPct) + '%';
-  document.getElementById('kpi-horas-real').textContent = totalReal;
-  document.getElementById('kpi-horas-note').textContent = `de ${state.totalPrevisto}h · saldo ${totalSaldo}h`;
+  document.getElementById('kpi-horas-real').textContent = `${totalReal} h`;
+  document.getElementById('kpi-horas-note').textContent = `de ${state.totalPrevisto} h · saldo de ${totalSaldo} h`;
 
   const curId = currentEtapaId();
   const curEtapa = etapaObj(curId);
@@ -987,7 +1056,7 @@ function renderTimeline(){
           <div class="visit-time">${v.inicio||'—'} – ${v.fim||'—'} · ${v.horasNoDia}h</div>
           ${tagRowHtml(etapaIdsOf(v))}
           <div class="visit-acc">${escapeHtml(etapaAllocationJoined(v))}</div>
-          <div class="visit-acc">acumulado: ${running}h (${fmtPct(pct)}%)</div>
+          <div class="visit-acc visit-acc-total">Acumulado: ${running}h (${fmtPct(pct)}%)</div>
         </div>
       </div>`;
   }).join('');
@@ -1029,11 +1098,13 @@ function renderStageBars(porFase){
     const pct = e.prev > 0 ? Math.min(1, e.real/e.prev) : 0;
     const corClasse = pct >= 1 ? 'bar-fill-done' : pct >= 0.5 ? 'bar-fill-mid' : 'bar-fill-low';
     const previsao = previsaoPorId[e.id];
-    const previsaoTexto = !previsao || previsao.status === 'concluida'
-      ? ''
-      : previsao.status === 'estimada'
-        ? `Previsão de conclusão: ${fmtDateBR(previsao.dataPrevista)}`
-        : 'Planeje mais visitas para estimar a conclusão';
+    const previsaoTexto = previsao && previsao.dataPrevista
+      ? previsao.status === 'concluida'
+        ? `Concluída em: ${fmtDateBR(previsao.dataPrevista)}`
+        : `Previsão de conclusão: ${fmtDateBR(previsao.dataPrevista)}`
+      : previsao && previsao.status === 'insuficiente'
+        ? 'Planeje mais visitas para estimar a conclusão'
+        : '';
     return `<div class="stage-bar-block">
         <div class="stage-bar-row">
           <div class="stage-bar-label">${escapeHtml(e.curto)}</div>
@@ -1045,6 +1116,12 @@ function renderStageBars(porFase){
   }).join('');
 }
 
+// Seleção múltipla pra SGSET no histórico — mesmo padrão de "modo de
+// seleção + barra de ação" já usado no planejamento de visitas, só que em
+// cima de state.visitas (realizadas) em vez de visitasPlanejadas.
+let selecaoSgsetAtiva = false;
+const selecionadosSgset = new Set();
+
 function renderArchive(){
   const list = document.getElementById('archive-list');
   let running = 0;
@@ -1055,21 +1132,120 @@ function renderArchive(){
     const acc = accByN[v.n];
     const pct = state.totalPrevisto > 0 ? acc / state.totalPrevisto : 0;
     const paras = v.resumo.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    const pendente = visitaSgsetPendente(v);
+    const podeSelecionar = selecaoSgsetAtiva && isRealOwner && pendente;
     return `<div class="archive-card${idx===0 ? ' archive-latest' : ''}">
         <div class="archive-side">
+          ${podeSelecionar ? `<label class="archive-select-check">
+            <input type="checkbox" ${selecionadosSgset.has(v.id) ? 'checked' : ''} onchange="toggleVisitaSgsetSelecionada('${v.id}', this.checked)">
+            Selecionar
+          </label>` : ''}
           <div class="archive-num">VISITA ${String(v.n).padStart(2,'0')}</div>
           <div class="archive-date">${fmtDateBR(v.dataISO)}</div>
           <div class="archive-hours">${v.horasNoDia}h no dia · ${acc}h acumuladas (${fmtPct(pct)}%)<br>${escapeHtml(etapaAllocationJoined(v))}</div>
           ${tagRowHtml(etapaIdsOf(v))}
+          <div class="sgset-status ${pendente ? 'sgset-pendente' : 'sgset-ok'}">${pendente ? 'SGSET pendente' : '✓ SGSET OK'}</div>
           ${isOwner ? `<div class="archive-actions">
             <button type="button" class="link-btn" onclick="openFormForEdit('${v.id}')">Editar</button>
             <button type="button" class="link-btn link-btn-danger" onclick="deleteVisit('${v.id}')">Excluir</button>
+            ${(isRealOwner && !pendente) ? `<button type="button" class="link-btn link-btn-sgset-ok" onclick="reabrirSgset('${v.id}')" title="Marcar novamente como pendente">✓ SGSET OK</button>` : ''}
           </div>` : ''}
         </div>
         <div class="archive-text">${paras}</div>
       </div>`;
   }).join('');
+  atualizarArchiveBulkBar();
 }
+
+function toggleSelecaoSgset(){
+  if(!isRealOwner) return;
+  selecaoSgsetAtiva = !selecaoSgsetAtiva;
+  if(!selecaoSgsetAtiva) selecionadosSgset.clear();
+  document.getElementById('btn-selecionar-sgset').textContent = selecaoSgsetAtiva ? '✕ Cancelar seleção' : '☑ Selecionar para SGSET';
+  renderArchive();
+}
+
+function toggleVisitaSgsetSelecionada(visitaId, marcado){
+  if(marcado) selecionadosSgset.add(visitaId); else selecionadosSgset.delete(visitaId);
+  atualizarArchiveBulkBar();
+}
+
+function atualizarArchiveBulkBar(){
+  const bar = document.getElementById('archive-bulk-bar');
+  bar.classList.toggle('hidden', !selecaoSgsetAtiva);
+  const selecionadas = state.visitas.filter(v => selecionadosSgset.has(v.id));
+  const totalHoras = selecionadas.reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+  document.getElementById('archive-bulk-count').textContent = `${selecionadas.length} visita(s) selecionada(s) · ${totalHoras}h`;
+  document.getElementById('btn-archive-gerar-sgset').disabled = !selecionadas.length;
+}
+
+function cancelarSelecaoSgset(){
+  selecaoSgsetAtiva = false;
+  selecionadosSgset.clear();
+  document.getElementById('btn-selecionar-sgset').textContent = '☑ Selecionar para SGSET';
+}
+
+// Monta UM bloco de assessoria contendo todas as visitas selecionadas (uma
+// ou várias) e abre o painel de resultado compartilhado com painel.html.
+async function gerarSgsetParaVisitas(visitaIds){
+  if(!isRealOwner || !visitaIds.length) return;
+  const selecionadas = state.visitas.filter(v => visitaIds.includes(v.id));
+  if(!selecionadas.length) return;
+  const jaEncaminhadas = state.visitas
+    .filter(v => !visitaIds.includes(v.id) && !visitaSgsetPendente(v))
+    .reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+  const { assunto, corpo } = buildSgsetTexto({
+    consultorNome: meuNome,
+    dataGeracao: todayISO(),
+    blocos: [{
+      clienteNome: assessoriaRow.cliente_nome,
+      projetoNome: assessoriaRow.nome,
+      proposta: assessoriaRow.proposta,
+      totalPrevisto: state.totalPrevisto,
+      horasJaEncaminhadas: jaEncaminhadas,
+      visitas: selecionadas.map(v => ({ dataISO: v.dataISO, resumo: v.resumo, participantes: participantesDaVisitaParaTexto(v, assessoriaRow.owner_id, nomeDoConsultor) }))
+    }]
+  });
+  const totalHoras = selecionadas.reduce((s,v) => s + Number(v.horasNoDia||0), 0);
+  await showSgsetResultado({
+    assunto, corpo,
+    totalVisitas: selecionadas.length,
+    totalHoras,
+    onConfirmarEnvio: async () => {
+      const marcadoEm = new Date().toISOString();
+      selecionadas.forEach(v => {
+        v.sgset = { status:'enviado', enviadoEm: marcadoEm, enviadoPor: { id: session.user.id, nome: meuNome } };
+      });
+      cancelarSelecaoSgset();
+      renderArchive();
+      saveState();
+    }
+  });
+}
+
+async function reabrirSgset(visitaId){
+  if(!isRealOwner) return;
+  const v = state.visitas.find(x => x.id === visitaId);
+  if(!v) return;
+  const confirmado = await showActionPanel({
+    title: 'Marcar novamente como pendente?',
+    subtitle: `Visita de ${fmtDateBR(v.dataISO)} — isso não desfaz nenhum lançamento já feito no SGSET, só reabre o controle interno para reenvio.`,
+    actions: [
+      { label:'Marcar como pendente', style:'danger', value:'sim' },
+      { label:'Cancelar', style:'ghost', value:'nao' }
+    ]
+  });
+  if(!confirmado || confirmado.action !== 'sim') return;
+  delete v.sgset;
+  renderArchive();
+  saveState();
+}
+window.toggleVisitaSgsetSelecionada = toggleVisitaSgsetSelecionada;
+window.reabrirSgset = reabrirSgset;
+
+document.getElementById('btn-selecionar-sgset').addEventListener('click', toggleSelecaoSgset);
+document.getElementById('btn-archive-gerar-sgset').addEventListener('click', () => gerarSgsetParaVisitas(Array.from(selecionadosSgset)));
+document.getElementById('btn-archive-cancelar-sgset').addEventListener('click', () => { cancelarSelecaoSgset(); renderArchive(); });
 
 let planCalendarBase = null;
 let outrasAssessorias = [];
@@ -1202,6 +1378,7 @@ function renderPlanejamento(){
   const bulkBar = document.getElementById('plan-bulk-bar');
   bulkBar.classList.toggle('hidden', !selectionMode);
   document.getElementById('plan-bulk-count').textContent = `${selectedDates.size} dia(s) selecionado(s)`;
+  document.getElementById('btn-bulk-participantes').classList.toggle('hidden', participantesOptions().length <= 1);
 
   // "Pendente" = planejado mas ainda sem visita realizada nessa data. Uma
   // visita registrada sem nunca ter sido planejada (avulsa) já entra em
@@ -1279,11 +1456,13 @@ async function onCalendarDayClick(iso){
     return;
   }
   if(info && (info.type === 'planejada' || info.type === 'atrasada')){
+    const podeEditarParticipantes = participantesOptions().length > 1;
     const result = await showActionPanel({
       title: fmtDateBR(iso),
       subtitle: `Planejada: ${info.planned}h`,
       actions: [
         { label:'Reagendar para outra data', style:'primary', value:'reagendar' },
+        ...(podeEditarParticipantes ? [{ label:'Editar participantes', style:'ghost', value:'participantes' }] : []),
         { label:'Remover planejamento', style:'danger', value:'remover' },
         { label:'Cancelar', style:'ghost', value:'cancel' }
       ]
@@ -1292,6 +1471,11 @@ async function onCalendarDayClick(iso){
     if(result.action === 'reagendar'){
       const entrada = state.visitasPlanejadas.find(p => p.dataISO === iso);
       if(entrada) await reagendarEntrada(entrada, iso);
+      return;
+    }
+    if(result.action === 'participantes'){
+      const entrada = state.visitasPlanejadas.find(p => p.dataISO === iso);
+      if(entrada) await editarParticipantesEntradas([entrada]);
       return;
     }
     const confirmado = await showActionPanel({
@@ -1317,10 +1501,15 @@ async function onCalendarDayClick(iso){
     });
     return;
   }
+  const opcoesParticipantes = participantesOptions();
+  const usaParticipantes = opcoesParticipantes.length > 1;
   const result = await showActionPanel({
     title: `Planejar visita`,
     subtitle: fmtDateBR(iso),
-    fields: [
+    fields: usaParticipantes ? [
+      { id:'participantes', type:'participantes', label:'Consultores participantes', options: opcoesParticipantes.map((o,i) => ({ id:o.id, nome:o.nome, checked: i===0, horas: 8 })) },
+      { id:'deslocamento', label:'Deslocamento previsto (opcional, até 2h)', type:'number', placeholder:'0' }
+    ] : [
       { id:'horas', label:'Quantas horas?', type:'number', value:'8' },
       { id:'deslocamento', label:'Deslocamento previsto (opcional, até 2h)', type:'number', placeholder:'0' }
     ],
@@ -1330,14 +1519,65 @@ async function onCalendarDayClick(iso){
     ]
   });
   if(!result || result.action !== 'ok') return;
-  const horas = Number(String(result.values.horas).trim().replace(',','.'));
-  if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
+
+  let horas, participantes;
+  if (usaParticipantes) {
+    participantes = result.values.participantes || [];
+    if (!participantes.length) { alert('Selecione ao menos um consultor participante.'); return; }
+    horas = participantes.reduce((s,p) => s + Number(p.horas || 0), 0);
+    if (!(horas > 0)) { alert('Informe um número de horas válido para ao menos um participante.'); return; }
+  } else {
+    horas = Number(String(result.values.horas).trim().replace(',','.'));
+    if(!Number.isFinite(horas) || horas <= 0){ alert('Informe um número de horas válido.'); return; }
+  }
   const deslocamentoInput = Number(String(result.values.deslocamento || '').trim().replace(',','.'));
   const deslocamentoHoras = Number.isFinite(deslocamentoInput) && deslocamentoInput > 0 ? Math.min(2, deslocamentoInput) : undefined;
-  state.visitasPlanejadas.push({ id: makeId(), dataISO: iso, horas, deslocamentoHoras });
+
+  if (usaParticipantes) {
+    const conflitos = await checarConflitosParticipantes(iso, participantes);
+    if (conflitos.length) {
+      const confirmado = await showActionPanel({
+        title: 'Conflito de agenda',
+        subtitle: conflitos.join('\n'),
+        actions: [
+          { label:'Planejar mesmo assim', style:'danger', value:'sim' },
+          { label:'Cancelar', style:'ghost', value:'nao' }
+        ]
+      });
+      if (!confirmado || confirmado.action !== 'sim') return;
+    }
+  }
+
+  const novaEntrada = { id: makeId(), dataISO: iso, horas, deslocamentoHoras };
+  if (usaParticipantes) novaEntrada.participantes = participantes;
+  state.visitasPlanejadas.push(novaEntrada);
   state.visitasPlanejadas.sort((a,b) => a.dataISO.localeCompare(b.dataISO));
   renderPlanejamento();
   saveState();
+}
+
+// Checa, pra cada participante marcado, se ele já está comprometido em outro
+// lugar naquela data (outra assessoria própria ou de colaboração, visita
+// já realizada, compensação ou feriado) — via consultor_ocupado_em(), que só
+// devolve ocupado/horas/tipo, nunca em qual assessoria/cliente. Não bloqueia:
+// devolve os avisos pra quem está planejando decidir se segue mesmo assim.
+async function checarConflitosParticipantes(iso, participantes, ignorarAssessoriaId){
+  const avisos = [];
+  for (const p of participantes) {
+    const { data, error } = await sb.rpc('consultor_ocupado_em', {
+      assessoria_origem_id: assessoriaId,
+      consultor_id: p.consultorId,
+      data_consulta: iso,
+      ignorar_assessoria_id: ignorarAssessoriaId || null
+    });
+    if (error || !data || !data[0] || !data[0].ocupado) continue;
+    const info = data[0];
+    const motivo = info.tipo === 'compensacao' ? 'compensação'
+      : info.tipo === 'feriado' ? 'feriado'
+      : `${info.horas}h em outro compromisso`;
+    avisos.push(`${p.nome}: já está ocupado(a) nesse dia (${motivo}).`);
+  }
+  return avisos;
 }
 
 function toggleSelectionMode(){
@@ -1384,6 +1624,73 @@ async function bulkSetHours(){
   selectionMode = false;
   document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
   renderPlanejamento();
+  saveState();
+}
+
+// Edita participantes[] de visitas planejadas já existentes, sem recriar
+// datas. Usada tanto pela barra de seleção múltipla quanto pelo clique num
+// único dia já planejado (mesmo componente, array de 1 ou N entradas) — ver
+// chamadas em btn-bulk-participantes e onCalendarDayClick.
+async function editarParticipantesEntradas(entradas){
+  if(!isOwner || !entradas.length) return;
+  const opcoes = participantesOptions();
+  if(opcoes.length <= 1) return;
+
+  const base = entradas.slice().sort((a,b) => a.dataISO.localeCompare(b.dataISO))[0];
+  const existentesPorId = base.participantes && base.participantes.length
+    ? new Map(base.participantes.map(p => [p.consultorId, p.horas]))
+    : new Map([[assessoriaRow.owner_id, Number(base.horas) || 8]]);
+  const horasPadrao = Number(base.horas) || 8;
+
+  const result = await showActionPanel({
+    title: 'Editar participantes',
+    subtitle: `${entradas.length} visita(s) selecionada(s)`,
+    fields: [{
+      id: 'participantes', type: 'participantes', label: 'Consultores participantes',
+      options: opcoes.map(o => ({
+        id: o.id, nome: o.nome,
+        checked: existentesPorId.has(o.id),
+        horas: existentesPorId.has(o.id) ? existentesPorId.get(o.id) : horasPadrao
+      }))
+    }],
+    actions: [
+      { label:'Aplicar', style:'primary', value:'ok' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
+    ]
+  });
+  if(!result || result.action !== 'ok') return;
+
+  const participantesNovos = result.values.participantes || [];
+  if(!participantesNovos.length){ alert('Selecione ao menos um consultor participante.'); return; }
+  const horasTotal = participantesNovos.reduce((s,p) => s + Number(p.horas||0), 0);
+  if(!(horasTotal > 0)){ alert('Informe um número de horas válido para ao menos um participante.'); return; }
+
+  const avisosPorData = [];
+  for (const entrada of entradas) {
+    const avisos = await checarConflitosParticipantes(entrada.dataISO, participantesNovos, assessoriaId);
+    if(avisos.length) avisosPorData.push(`${fmtDateBR(entrada.dataISO)}: ${avisos.join('; ')}`);
+  }
+  if(avisosPorData.length){
+    const confirmado = await showActionPanel({
+      title: 'Conflito de agenda',
+      subtitle: avisosPorData.join('\n'),
+      actions: [
+        { label:'Aplicar mesmo assim', style:'danger', value:'sim' },
+        { label:'Cancelar', style:'ghost', value:'nao' }
+      ]
+    });
+    if(!confirmado || confirmado.action !== 'sim') return;
+  }
+
+  entradas.forEach(entrada => {
+    entrada.participantes = participantesNovos;
+    entrada.horas = horasTotal;
+  });
+  selectedDates.clear();
+  selectionMode = false;
+  document.getElementById('btn-selecionar-multiplos').textContent = '☑ Selecionar vários dias';
+  renderPlanejamento();
+  renderTimeline();
   saveState();
 }
 
@@ -1557,6 +1864,7 @@ function prefillFormForNew(){
     fillFromEtapa2();
   }
   updateDailyHoursTotal();
+  renderParticipantesVisitaForm(planejadaHoje && planejadaHoje.participantes);
 }
 function fillFromEtapa(){
   const e = etapaObj(document.getElementById('field-etapa').value);
@@ -1578,6 +1886,112 @@ function updateDailyHoursTotal(){
   const hours2 = secondEnabled ? Number(document.getElementById('field-horas-etapa2').value || 0) : 0;
   const total = Math.round((Math.max(0,hours1)+Math.max(0,hours2))*100)/100;
   document.getElementById('field-horasdia').value = total || '';
+  atualizarIndicadorParticipantesVisita();
+}
+
+// Checklist "Consultores participantes" dentro do form de registrar/editar
+// visita. Só aparece quando a assessoria tem consultor vinculado (além do
+// dono) — sem isso, o form continua idêntico ao de sempre.
+function renderParticipantesVisitaForm(participantesExistentes){
+  const wrap = document.getElementById('participantes-visita-wrap');
+  const opcoes = participantesOptions();
+  if (opcoes.length <= 1) { wrap.classList.add('hidden'); document.getElementById('participantes-visita-lista').innerHTML = ''; return; }
+  wrap.classList.remove('hidden');
+  const existentesPorId = new Map((participantesExistentes || []).map(p => [p.consultorId, p.horas]));
+  const totalAtual = Number(document.getElementById('field-horasdia').value || 0) || 8;
+  const lista = document.getElementById('participantes-visita-lista');
+  lista.innerHTML = opcoes.map((o, i) => {
+    const marcado = participantesExistentes ? existentesPorId.has(o.id) : i === 0;
+    const horas = existentesPorId.has(o.id) ? existentesPorId.get(o.id) : totalAtual;
+    return `
+      <div class="participante-visita-linha">
+        <label>
+          <input type="checkbox" data-pv-check data-pv-id="${escapeAttr(o.id)}" ${marcado ? 'checked' : ''}>
+          ${escapeHtml(o.nome)}
+        </label>
+        <input type="number" min="0" step="0.5" data-pv-horas data-pv-id="${escapeAttr(o.id)}" value="${horas || ''}" ${marcado ? '' : 'disabled'}>
+      </div>
+    `;
+  }).join('');
+  lista.querySelectorAll('[data-pv-check]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const horasInput = lista.querySelector(`[data-pv-horas][data-pv-id="${chk.dataset.pvId}"]`);
+      if (horasInput) horasInput.disabled = !chk.checked;
+      sincronizarFasesComParticipantes();
+    });
+  });
+  lista.querySelectorAll('[data-pv-horas]').forEach(inp => {
+    inp.addEventListener('input', sincronizarFasesComParticipantes);
+  });
+  atualizarIndicadorParticipantesVisita();
+}
+
+function atualizarIndicadorParticipantesVisita(){
+  const lista = document.getElementById('participantes-visita-lista');
+  const totalEl = document.getElementById('participantes-visita-total');
+  if (!lista || !totalEl || !lista.children.length) return;
+  const totalVisita = Number(document.getElementById('field-horasdia').value || 0);
+  let totalParticipantes = 0;
+  lista.querySelectorAll('[data-pv-check]').forEach(chk => {
+    if (!chk.checked) return;
+    const horasInput = lista.querySelector(`[data-pv-horas][data-pv-id="${chk.dataset.pvId}"]`);
+    totalParticipantes += Number(horasInput && horasInput.value) || 0;
+  });
+  totalEl.textContent = `Atribuído aos participantes: ${totalParticipantes}h (visita: ${totalVisita}h)`;
+}
+
+// soma(participantes[].horas) é a referência: quando ela muda, redistribui
+// automaticamente entre as fases preservando a proporção atual entre elas
+// (fase única = 100% pra ela). Sem isso dava pra salvar "participantes: 24h,
+// fases: 16h" — chamada tanto ao vivo (edição do checklist) quanto no
+// início do submit, pra garantir a consistência mesmo se a fase for editada
+// à mão por último.
+function sincronizarFasesComParticipantes(){
+  const opcoes = participantesOptions();
+  const lista = document.getElementById('participantes-visita-lista');
+  if (opcoes.length > 1 && lista && lista.children.length) {
+    let novoTotal = 0;
+    lista.querySelectorAll('[data-pv-check]').forEach(chk => {
+      if (!chk.checked) return;
+      const horasInput = lista.querySelector(`[data-pv-horas][data-pv-id="${chk.dataset.pvId}"]`);
+      novoTotal += Number(horasInput && horasInput.value) || 0;
+    });
+    novoTotal = Math.round(novoTotal * 100) / 100;
+
+    const etapa2Enabled = document.getElementById('field-etapa2-toggle').checked;
+    const campo1 = document.getElementById('field-horas-etapa');
+    const campo2 = document.getElementById('field-horas-etapa2');
+    const hours1Atual = Number(campo1.value || 0);
+    const hours2Atual = etapa2Enabled ? Number(campo2.value || 0) : 0;
+    const totalAtual = Math.round((hours1Atual + hours2Atual) * 100) / 100;
+
+    if (totalAtual > 0 && novoTotal > 0 && Math.abs(totalAtual - novoTotal) >= 0.005) {
+      if (!etapa2Enabled) {
+        campo1.value = novoTotal;
+      } else {
+        const proporcao1 = hours1Atual / totalAtual;
+        const hours1Novo = Math.round(novoTotal * proporcao1 * 100) / 100;
+        const hours2Novo = Math.round((novoTotal - hours1Novo) * 100) / 100;
+        campo1.value = hours1Novo;
+        campo2.value = hours2Novo;
+      }
+    }
+  }
+  updateDailyHoursTotal();
+}
+
+// Lê o checklist e devolve o array participantes[], ou undefined quando a
+// assessoria não tem consultor vinculado (form nem mostra o checklist nesse caso).
+function coletarParticipantesVisitaForm(){
+  const opcoes = participantesOptions();
+  if (opcoes.length <= 1) return undefined;
+  const lista = document.getElementById('participantes-visita-lista');
+  return opcoes
+    .filter(o => { const chk = lista.querySelector(`[data-pv-check][data-pv-id="${o.id}"]`); return chk && chk.checked; })
+    .map(o => {
+      const horasInput = lista.querySelector(`[data-pv-horas][data-pv-id="${o.id}"]`);
+      return { consultorId: o.id, nome: o.nome, horas: Number(horasInput.value) || 0 };
+    });
 }
 
 window.openFormForEdit = function(id){
@@ -1615,6 +2029,7 @@ window.openFormForEdit = function(id){
   }
 
   updateDailyHoursTotal();
+  renderParticipantesVisitaForm(v.participantes);
   document.getElementById('field-resumo').value = v.resumo.join('\n');
   document.getElementById('form-card').classList.remove('hidden');
   document.getElementById('form-card').scrollIntoView({behavior:'smooth', block:'start'});
@@ -1777,10 +2192,10 @@ function applyHeaderInfo(){
   document.getElementById('header-sub').textContent =
     `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
   document.getElementById('session-email').textContent = session.user.email;
-  const isRealOwner = session.user.id === assessoriaRow.owner_id;
+  isRealOwner = session.user.id === assessoriaRow.owner_id;
   const roleBadge = document.getElementById('role-badge');
-  roleBadge.textContent = isRealOwner ? 'Consultor' : (isGestorUser ? 'Gestor (visualizando)' : 'Cliente (somente leitura)');
-  roleBadge.className = 'role-badge ' + (isOwner ? 'owner' : 'client');
+  roleBadge.textContent = isRealOwner ? 'Consultor' : (isGestorUser ? 'Gestor (visualizando)' : 'Consultor · Modo de visualização');
+  roleBadge.className = 'role-badge ' + (isOwner ? 'owner' : 'readonly');
   roleBadge.classList.remove('hidden');
   const backLink = document.getElementById('back-link');
   if(!isRealOwner && isGestorUser){
@@ -1806,6 +2221,8 @@ function applyRoleUI(){
   document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
   document.getElementById('prazos-bp-card').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
+  // SGSET é ação exclusiva do dono de fato — nunca do gestor visualizando.
+  document.getElementById('btn-selecionar-sgset').classList.toggle('hidden', !isRealOwner);
   applyPorteGate();
 }
 
@@ -2092,6 +2509,13 @@ document.getElementById('btn-gerar-datas').addEventListener('click', gerarDatasP
 document.getElementById('btn-limpar-plan').addEventListener('click', limparPlanejamento);
 document.getElementById('btn-selecionar-multiplos').addEventListener('click', toggleSelectionMode);
 document.getElementById('btn-bulk-horas').addEventListener('click', bulkSetHours);
+document.getElementById('btn-bulk-participantes').addEventListener('click', () => {
+  const entradas = Array.from(selectedDates)
+    .map(iso => state.visitasPlanejadas.find(p => p.dataISO === iso))
+    .filter(Boolean);
+  if(!entradas.length){ alert('Nenhuma das datas selecionadas tem visita planejada.'); return; }
+  editarParticipantesEntradas(entradas);
+});
 document.getElementById('btn-bulk-dia-semana').addEventListener('click', bulkMudarDiaSemana);
 document.getElementById('btn-bulk-excluir').addEventListener('click', bulkDelete);
 document.getElementById('btn-bulk-cancelar').addEventListener('click', cancelSelection);
@@ -2119,6 +2543,7 @@ document.getElementById('field-data').addEventListener('change', function(){
   if(editingId) return;
   const planejada = state.visitasPlanejadas.find(p => p.dataISO === this.value);
   document.getElementById('field-deslocamento').value = (planejada && planejada.deslocamentoHoras) || '';
+  renderParticipantesVisitaForm(planejada && planejada.participantes);
 });
 document.getElementById('field-etapa').addEventListener('change', fillFromEtapa);
 document.getElementById('field-etapa2').addEventListener('change', fillFromEtapa2);
@@ -2141,6 +2566,10 @@ document.getElementById('btn-emitir').addEventListener('click', () => {
 document.getElementById('visit-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
   if(!isOwner) return;
+  // Garante a consistência mesmo se a fase foi editada à mão por último,
+  // sem passar pelo checklist de participantes — participantes[] continua
+  // sendo a referência do total.
+  sincronizarFasesComParticipantes();
   const fd = new FormData(ev.target);
   const etapaId = fd.get('etapa');
   const status1 = fd.get('status');
@@ -2170,6 +2599,23 @@ document.getElementById('visit-form').addEventListener('submit', (ev) => {
   }
   const deslocamentoHoras = Number.isFinite(deslocamentoInput) && deslocamentoInput > 0 ? deslocamentoInput : undefined;
 
+  const participantes = coletarParticipantesVisitaForm();
+  if(participantes !== undefined && !participantes.length){
+    alert('Selecione ao menos um consultor participante.');
+    return;
+  }
+  if(participantes !== undefined){
+    const somaParticipantes = Math.round(participantes.reduce((s,p) => s + Number(p.horas||0), 0) * 100) / 100;
+    if(somaParticipantes <= 0){
+      alert('Informe as horas de cada participante selecionado.');
+      return;
+    }
+    if(Math.abs(somaParticipantes - totalHours) >= 0.01){
+      alert(`As horas dos participantes (${somaParticipantes}h) não batem com o total da visita (${totalHours}h). Ajuste antes de salvar.`);
+      return;
+    }
+  }
+
   const snaps = {};
   snaps[etapaId] = {horas:Math.round(hours1*100)/100, status:status1};
   if(etapa2Enabled && etapaId2){
@@ -2191,6 +2637,7 @@ document.getElementById('visit-form').addEventListener('submit', (ev) => {
       v.etapaSnapshots = snaps;
       v.status = status1;
       v.resumo = resumoArr;
+      v.participantes = participantes;
     }
   } else {
     state.visitas.push({
@@ -2204,7 +2651,8 @@ document.getElementById('visit-form').addEventListener('submit', (ev) => {
       primaryEtapaId: etapaId,
       etapaSnapshots: snaps,
       status: status1,
-      resumo: resumoArr
+      resumo: resumoArr,
+      participantes
     });
   }
 
@@ -2228,8 +2676,9 @@ async function boot(){
   session = await requireSession();
   if(!session) return;
 
-  const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+  const { data: perfil } = await sb.from('profiles').select('role,nome,email').eq('id', session.user.id).maybeSingle();
   isGestorUser = Boolean(perfil && perfil.role === 'gestor');
+  meuNome = (perfil && (perfil.nome || perfil.email)) || session.user.email;
 
   const { data, error } = await sb.from('assessorias').select('*').eq('id', assessoriaId).single();
   if(error || !data){
@@ -2238,6 +2687,14 @@ async function boot(){
     return;
   }
   assessoriaRow = data;
+  // Nunca renderiza uma assessoria MOVER com carga_contratada inválida como
+  // se fosse B+P — barra aqui, antes de qualquer render, em vez de deixar
+  // ensureProjectSchema() lançar mais adiante sem contexto pro usuário.
+  if(assessoriaRow.programa === 'MOVER' && !PROGRAM_CONFIG.MOVER.modalidades[assessoriaRow.carga_contratada]){
+    alert('Esta assessoria MOVER está com a carga contratada inválida ou não definida. Contate o suporte.');
+    window.location.href = 'painel.html';
+    return;
+  }
   // Dono da assessoria edita normalmente; gestor também pode editar
   // qualquer assessoria de qualquer consultor, se quiser.
   isOwner = session.user.id === data.owner_id || isGestorUser;
@@ -2252,6 +2709,10 @@ async function boot(){
     compensacoes = comp || [];
     const { data: feriados } = await sb.from('feriados_municipais').select('*').eq('owner_id', data.owner_id);
     feriadosMunicipais = feriados || [];
+    const { data: colabRows } = await sb.from('assessoria_colaboradores').select('colaborador_id').eq('assessoria_id', assessoriaId);
+    colaboradoresDaAssessoria = (colabRows || []).map(r => r.colaborador_id);
+    const { data: consultoresList } = await sb.rpc('list_consultores');
+    consultoresParaPlanejamento = consultoresList || [];
   }
 
   ensureProjectSchema();

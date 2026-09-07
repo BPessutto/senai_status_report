@@ -81,6 +81,22 @@ export const PRAZO_ENCERRAMENTO_DIAS = 115; // 16 semanas (115 dias corridos)
 // tempo: (a) uma previsão aproximada de quando cada fase deve terminar, e (b) qual fase
 // cada visita planejada tende a avançar - sem precisar que o consultor marque a fase na
 // hora de planejar.
+// Para uma fase já concluída (horas reais >= previstas), acha a data da visita
+// que fechou a conta - assim a fase concluída continua mostrando "quando",
+// em vez de simplesmente não ter mais data nenhuma pra exibir.
+function dataConclusaoRealizada(visitas, etapa){
+  let acumulado = 0;
+  for (const v of visitas) {
+    const snap = v.etapaSnapshots && v.etapaSnapshots[etapa.id];
+    const horas = snap ? Number(snap.horas || 0) : 0;
+    if (horas > 0) {
+      acumulado = Math.round((acumulado + horas) * 100) / 100;
+      if (acumulado >= etapa.prev) return v.dataISO;
+    }
+  }
+  return null;
+}
+
 export function computeFasePrevisoes(state){
   const realizadas = new Set(state.visitas.map(v => v.dataISO));
   const pendentes = state.visitasPlanejadas
@@ -95,7 +111,7 @@ export function computeFasePrevisoes(state){
   for (const etapa of state.etapas) {
     let faltam = Math.max(0, Math.round((etapa.prev - etapa.real) * 100) / 100);
     if (faltam <= 0) {
-      porFase.push({ etapaId: etapa.id, status: 'concluida', dataPrevista: null });
+      porFase.push({ etapaId: etapa.id, status: 'concluida', dataPrevista: dataConclusaoRealizada(state.visitas, etapa) });
       continue;
     }
     let dataPrevista = null;
@@ -143,4 +159,84 @@ export function defaultState(porte = null) {
     printSettings: { includeDeliverables: false }
   };
   return applyPorteHours(base, porte);
+}
+
+// ============================================================
+// Programa MOVER Hands-On — ETAPA 1 (fundação estrutural).
+// ============================================================
+// Config central por programa/modalidade, pra não espalhar as horas de cada
+// fase e as cargas contratadas em vários arquivos. BP aqui só referencia as
+// constantes que já existem acima (não duplica STAGE_DEFINITIONS/PORTE_HOURS)
+// — serve como um único ponto de consulta "programa -> config" pro gestor e
+// relatórios filtrarem/agruparem por programa no futuro.
+export const PROGRAM_CONFIG = {
+  BP: {
+    prazoDias: { apontamento: PRAZO_APONTAMENTO_DIAS, encerramento: PRAZO_ENCERRAMENTO_DIAS }
+  },
+  MOVER: {
+    modalidades: {
+      200: {
+        totalPrevisto: 200,
+        etapas: [
+          { id: 'F01', curto: 'Fase 01', nome: 'Fase 01 — Diagnóstico', prev: 35 },
+          { id: 'F02', curto: 'Fase 02', nome: 'Fase 02 — Implementação', prev: 120 },
+          { id: 'F03', curto: 'Fase 03', nome: 'Fase 03 — Resultados', prev: 30 },
+          { id: 'F04', curto: 'Fase 04', nome: 'Fase 04 — Encerramento', prev: 15 }
+        ]
+      },
+      400: {
+        totalPrevisto: 400,
+        etapas: [
+          { id: 'F01', curto: 'Fase 01', nome: 'Fase 01 — Diagnóstico', prev: 70 },
+          { id: 'F02', curto: 'Fase 02', nome: 'Fase 02 — Implementação', prev: 240 },
+          { id: 'F03', curto: 'Fase 03', nome: 'Fase 03 — Resultados', prev: 60 },
+          { id: 'F04', curto: 'Fase 04', nome: 'Fase 04 — Encerramento', prev: 30 }
+        ]
+      },
+      600: {
+        totalPrevisto: 600,
+        etapas: [
+          { id: 'F01', curto: 'Fase 01', nome: 'Fase 01 — Diagnóstico', prev: 105 },
+          { id: 'F02', curto: 'Fase 02', nome: 'Fase 02 — Implementação', prev: 360 },
+          { id: 'F03', curto: 'Fase 03', nome: 'Fase 03 — Resultados', prev: 90 },
+          { id: 'F04', curto: 'Fase 04', nome: 'Fase 04 — Encerramento', prev: 45 }
+        ]
+      }
+    }
+  }
+};
+
+// IDs próprios (F01-F04, não T1-T4) de propósito: garante que nenhuma regra
+// específica do B+P amarrada aos IDs T1-T4 (ex.: a interação especial da
+// Fase 02 em dashboard.html) dispare sem querer numa assessoria MOVER.
+// Sem entregáveis nesta etapa (ver CLAUDE.md/plano da ETAPA 1) — conclusão
+// automática de fase (aplicarConclusaoAutomatica/etapaConcluidaEfetiva) já
+// trata lista vazia como "obrigatórios cumpridos" e passa a depender só de
+// horas, sem precisar de nenhum ajuste nessas funções.
+//
+// carga_contratada inválida nunca deve cair de volta no B+P silenciosamente
+// (regra explícita da ETAPA 1) — por isso essa função lança erro em vez de
+// devolver algo parecido com STAGE_DEFINITIONS.
+export function defaultStateMover(cargaContratada) {
+  const modalidade = PROGRAM_CONFIG.MOVER.modalidades[cargaContratada];
+  if (!modalidade) {
+    throw new Error(`Modalidade MOVER inválida: ${cargaContratada}. Valores aceitos: 200, 400, 600.`);
+  }
+  const etapas = modalidade.etapas.map(def => ({
+    id: def.id,
+    curto: def.curto,
+    nome: def.nome,
+    prev: def.prev,
+    real: 0,
+    status: 'Não iniciado',
+    entregaveis: []
+  }));
+  return {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    totalPrevisto: modalidade.totalPrevisto,
+    etapas,
+    visitas: [],
+    visitasPlanejadas: [],
+    printSettings: { includeDeliverables: false }
+  };
 }
