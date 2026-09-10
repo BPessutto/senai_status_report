@@ -216,24 +216,32 @@ export const PROGRAM_CONFIG = {
 //
 // carga_contratada inválida nunca deve cair de volta no B+P silenciosamente
 // (regra explícita da ETAPA 1) — por isso essa função lança erro em vez de
-// devolver algo parecido com STAGE_DEFINITIONS.
+// devolver algo parecido com STAGE_DEFINITIONS. null/undefined é o único
+// valor não-numérico aceito: representa "MOVER ainda não configurado"
+// (ETAPA 2 — a carga é escolhida depois, dentro da própria assessoria), e
+// não passa pelo throw abaixo.
 export function defaultStateMover(cargaContratada) {
-  const modalidade = PROGRAM_CONFIG.MOVER.modalidades[cargaContratada];
-  if (!modalidade) {
+  const naoConfigurado = cargaContratada === null || cargaContratada === undefined;
+  const modalidade = naoConfigurado ? null : PROGRAM_CONFIG.MOVER.modalidades[cargaContratada];
+  if (!naoConfigurado && !modalidade) {
     throw new Error(`Modalidade MOVER inválida: ${cargaContratada}. Valores aceitos: 200, 400, 600.`);
   }
-  const etapas = modalidade.etapas.map(def => ({
+  // Ids/nomes/curto de fase são idênticos nas três modalidades — pra "ainda
+  // não configurado" usamos a 200 só como fonte desses campos, nunca das
+  // horas (prev sai 0 em todas as fases quando naoConfigurado).
+  const etapasBase = (modalidade || PROGRAM_CONFIG.MOVER.modalidades[200]).etapas;
+  const etapas = etapasBase.map(def => ({
     id: def.id,
     curto: def.curto,
     nome: def.nome,
-    prev: def.prev,
+    prev: naoConfigurado ? 0 : def.prev,
     real: 0,
     status: 'Não iniciado',
     entregaveis: []
   }));
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
-    totalPrevisto: modalidade.totalPrevisto,
+    totalPrevisto: naoConfigurado ? 0 : modalidade.totalPrevisto,
     etapas,
     visitas: [],
     visitasPlanejadas: [],

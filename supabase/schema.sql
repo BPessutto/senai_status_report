@@ -52,26 +52,42 @@ alter table public.assessorias drop constraint if exists assessorias_programa_ch
 alter table public.assessorias add constraint assessorias_programa_check
   check (programa is null or programa in ('BP','MOVER'));
 
--- carga_contratada: NULL fora do MOVER, obrigatoriamente 200/400/600 no MOVER.
--- coalesce(programa,'BP') normaliza programa NULL pra 'BP' antes de comparar,
--- pra nunca comparar contra NULL (o que faria a expressão toda avaliar NULL
--- em vez de FALSE — e o Postgres trata resultado NULL de CHECK como
--- aprovado, só FALSE rejeita). Sem essa normalização, uma linha com
--- programa NULL e carga_contratada preenchida por engano passaria batido.
+-- carga_contratada: sempre NULL fora do MOVER. No MOVER, NULL representa
+-- "ainda não configurado" (a carga é escolhida depois, dentro da própria
+-- assessoria); se preenchida, só pode ser 200/400/600. coalesce(programa,'BP')
+-- normaliza programa NULL pra 'BP' antes de comparar, pra nunca comparar
+-- contra NULL (o que faria a expressão toda avaliar NULL em vez de FALSE —
+-- e o Postgres trata resultado NULL de CHECK como aprovado, só FALSE
+-- rejeita). Sem essa normalização, uma linha com programa NULL e
+-- carga_contratada preenchida por engano passaria batido. Cada ramo do OR
+-- carrega sua própria condição de programa (em vez de um "programa <>
+-- MOVER" solto na frente) pra nunca aprovar carga_contratada preenchida
+-- numa linha não-MOVER só porque o primeiro ramo já deu TRUE.
 alter table public.assessorias drop constraint if exists assessorias_carga_contratada_check;
 alter table public.assessorias add constraint assessorias_carga_contratada_check
   check (
-    (coalesce(programa,'BP') <> 'MOVER' and carga_contratada is null)
-    or (coalesce(programa,'BP') = 'MOVER' and carga_contratada is not null and carga_contratada in (200,400,600))
+    (
+      coalesce(programa,'BP') <> 'MOVER'
+      and carga_contratada is null
+    )
+    or
+    (
+      coalesce(programa,'BP') = 'MOVER'
+      and (
+        carga_contratada is null
+        or carga_contratada in (200,400,600)
+      )
+    )
   );
 
--- MOVER: as duas datas manuais são obrigatórias (nenhum cálculo automático
--- as substitui) e a data máxima nunca pode ser anterior à contratação.
+-- MOVER: as duas datas manuais nascem NULL (config feita depois, dentro da
+-- própria assessoria) e só podem ser preenchidas juntas — nunca uma sem a
+-- outra. A ordem entre elas (quando preenchidas) é a constraint seguinte.
 alter table public.assessorias drop constraint if exists assessorias_mover_datas_obrigatorias_check;
 alter table public.assessorias add constraint assessorias_mover_datas_obrigatorias_check
   check (
     programa is distinct from 'MOVER'
-    or (data_contratacao is not null and data_maxima_atendimento is not null)
+    or (data_contratacao is null) = (data_maxima_atendimento is null)
   );
 
 alter table public.assessorias drop constraint if exists assessorias_mover_datas_ordem_check;

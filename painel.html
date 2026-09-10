@@ -101,8 +101,11 @@
     <h2 id="modal-nova-titulo">Nova assessoria</h2>
     <form id="form-nova">
       <div class="field">
-        <label for="nova-nome">Nome do projeto</label>
-        <input type="text" id="nova-nome" required placeholder="Ex.: Projeto Lean — Empresa XPTO">
+        <label for="nova-programa">Programa</label>
+        <select id="nova-programa">
+          <option value="BP">Brasil + Produtivo (B+P)</option>
+          <option value="MOVER">MOVER – HandsOn</option>
+        </select>
       </div>
       <div class="field">
         <label for="nova-cliente">Nome do cliente / empresa</label>
@@ -134,7 +137,7 @@
 <script type="module">
   import { sb } from './js/supabase-client.js';
   import { requireSession, logout } from './js/session.js';
-  import { defaultState } from './js/stage-template.js';
+  import { defaultState, defaultStateMover } from './js/stage-template.js';
   import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex, nationalHolidayMap } from './js/calendar-utils.js';
   import { showActionPanel } from './js/action-panel.js';
   import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado, showSgsetSelecao } from './js/sgset.js';
@@ -251,7 +254,10 @@
     editingAssessoriaId = row.id;
     document.getElementById('modal-nova-titulo').textContent = 'Editar assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Salvar alterações';
-    document.getElementById('nova-nome').value = row.nome || '';
+    // Programa é imutável depois de criada (sem conversão BP<->MOVER) —
+    // carrega o valor real da linha (NULL legado = B+P) e trava o select.
+    document.getElementById('nova-programa').value = row.programa === 'MOVER' ? 'MOVER' : 'BP';
+    document.getElementById('nova-programa').disabled = true;
     document.getElementById('nova-cliente').value = row.cliente_nome || '';
     document.getElementById('nova-municipio').value = row.municipio || '';
     document.getElementById('nova-proposta').value = row.proposta || '';
@@ -266,6 +272,10 @@
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
+    // form.reset() só restaura valores, não o atributo disabled — o select
+    // de programa pode ter ficado travado por openEditModal() e precisa
+    // voltar liberado pra uma próxima criação.
+    document.getElementById('nova-programa').disabled = false;
     document.getElementById('nova-consultores-lista').innerHTML = '';
     document.getElementById('modal-nova').classList.add('hidden');
   }
@@ -937,6 +947,7 @@
     document.getElementById('modal-nova-titulo').textContent = 'Nova assessoria';
     document.getElementById('btn-salvar-nova').textContent = 'Criar assessoria';
     document.getElementById('form-nova').reset();
+    document.getElementById('nova-programa').disabled = false;
     document.getElementById('modal-nova').classList.remove('hidden');
     await carregarConsultoresDisponiveis();
     renderConsultoresLista(new Set());
@@ -946,7 +957,6 @@
     ev.preventDefault();
     const btnSalvar = document.getElementById('btn-salvar-nova');
     if (btnSalvar.disabled) return;
-    const nome = document.getElementById('nova-nome').value.trim();
     const cliente_nome = document.getElementById('nova-cliente').value.trim();
     const municipio = document.getElementById('nova-municipio').value.trim();
     const proposta = document.getElementById('nova-proposta').value.trim();
@@ -956,8 +966,9 @@
     btnSalvar.disabled = true;
     try {
       if (editingAssessoriaId) {
+        // "nome" não existe mais no form — nunca é reenviado na edição, pra
+        // não sobrescrever o valor (automático ou legado) já gravado.
         const { error } = await sb.from('assessorias').update({
-          nome,
           cliente_nome: cliente_nome || null,
           municipio: municipio || null,
           proposta: proposta || null
@@ -969,13 +980,27 @@
         return;
       }
 
+      // Programa só é escolhido na criação — fica travado depois (sem
+      // conversão BP<->MOVER, ver openEditModal). "nome" não existe mais na
+      // interface: preenchido automaticamente aqui só pra satisfazer a
+      // coluna "nome text not null" (schema.sql) e dar alguma identificação
+      // visível no card antes de haver configuração interna do programa.
+      const programa = document.getElementById('nova-programa').value;
+      const isMover = programa === 'MOVER';
+      const prefixoNome = isMover ? 'MOVER Hands-On' : 'Brasil + Produtivo';
+      const nomeAutomatico = cliente_nome ? `${prefixoNome} - ${cliente_nome}` : prefixoNome;
+      const camposPrograma = isMover
+        ? { programa: 'MOVER', carga_contratada: null, data_contratacao: null, data_maxima_atendimento: null, mostra_logo_bp: false }
+        : { programa: 'BP' };
+
       const { data, error } = await sb.from('assessorias').insert({
         owner_id: effectiveUserId,
-        nome,
+        nome: nomeAutomatico,
         cliente_nome: cliente_nome || null,
         municipio: municipio || null,
         proposta: proposta || null,
-        data: defaultState()
+        data: isMover ? defaultStateMover(null) : defaultState(),
+        ...camposPrograma
       }).select().single();
       if (error) { alert('Não foi possível criar a assessoria: ' + error.message); return; }
       await sincronizarColaboradores(data.id, consultoresIds, consultoresGerenciaveisIds);

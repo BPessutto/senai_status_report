@@ -42,6 +42,7 @@ header{
 .logo-box img{display:block}
 .logo-senai img{height:30px}
 .logo-bp img{height:30px}
+.logo-mover img{height:30px}
 .logo-cliente img{height:44px;max-width:120px}
 .title-block{text-align:center;min-width:0}
 @media(max-width:640px){.top{grid-template-columns:1fr}.logo-group-right{justify-self:start}}
@@ -87,6 +88,8 @@ h1{margin:0;font-size:22px;font-weight:800}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-top:14px}
 #porte-aviso-card{background:var(--amberbg);border:1px solid #f0d38a;color:var(--amber);font-size:13px;font-weight:700}
+#mover-aviso-pendente-card{background:var(--amberbg);border:1px solid #f0d38a;color:var(--amber);font-size:13px;font-weight:700}
+.mover-carga-bloqueada-aviso{font-size:12px;color:var(--muted);margin-top:10px}
 .card-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between}
 .card-title-left{display:flex;align-items:center;gap:8px}
 .card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}
@@ -349,6 +352,7 @@ h1{margin:0;font-size:22px;font-weight:800}
       </div>
       <div class="logo-group logo-group-right">
         <div class="logo-box logo-bp hidden" id="logo-bp-box"><img src="assets/logo-bp.png" alt="Brasil Mais Produtivo"></div>
+        <div class="logo-box logo-mover hidden" id="logo-mover-box"><img src="assets/logo-mover.jpg" alt="MOVER Hands-On"></div>
         <div class="logo-box logo-cliente hidden" id="logo-cliente-box"><img id="logo-cliente-img" alt="Logo do cliente"></div>
       </div>
     </div>
@@ -357,10 +361,6 @@ h1{margin:0;font-size:22px;font-weight:800}
       <label class="print-option" for="print-deliverables-toggle" title="Define se o relatório impresso mostrará a lista completa de entregáveis">
         <input type="checkbox" id="print-deliverables-toggle">
         Incluir entregáveis no relatório
-      </label>
-      <label class="print-option hidden" id="bp-toggle-label" for="bp-logo-toggle" title="Mostra ou esconde o logo do Brasil Mais Produtivo neste projeto">
-        <input type="checkbox" id="bp-logo-toggle">
-        Programa Brasil Mais Produtivo
       </label>
       <select class="porte-select hidden" id="porte-select" title="Porte da empresa — define a carga horária de cada fase do B+P">
         <option value="">-- Selecione o porte --</option>
@@ -374,6 +374,10 @@ h1{margin:0;font-size:22px;font-weight:800}
 
   <div class="card no-print hidden" id="porte-aviso-card">
     ⚠️ <strong>Selecione o porte da empresa</strong> (ME / EPP / Demais) no cabeçalho acima antes de planejar ou registrar visitas — isso define a carga horária correta desta assessoria e evita divergência depois.
+  </div>
+
+  <div class="card no-print hidden" id="mover-aviso-pendente-card">
+    ⚠️ <strong>Selecione a carga contratada</strong> (200h / 400h / 600h) na configuração do Programa MOVER abaixo antes de planejar ou registrar visitas — isso define a carga horária correta de cada fase e evita divergência depois.
   </div>
 
   <div class="kpi-row no-print">
@@ -412,6 +416,30 @@ h1{margin:0;font-size:22px;font-weight:800}
       <input type="date" id="field-contratacao">
     </div>
     <div class="prazos-grid" id="prazos-grid"></div>
+  </div>
+
+  <div class="card no-print hidden" id="config-mover-card">
+    <div class="card-title">Prazos do Programa MOVER</div>
+    <div class="field" style="max-width:240px">
+      <label for="mover-data-contratacao">Data de contratação</label>
+      <input type="date" id="mover-data-contratacao">
+    </div>
+    <div class="prazos-grid">
+      <div class="prazo-item" id="mover-carga-item">
+        <div class="prazo-label">Carga contratada</div>
+        <select id="mover-carga-select" class="prazo-data-input">
+          <option value="">Selecione a carga contratada</option>
+          <option value="200">200h</option>
+          <option value="400">400h</option>
+          <option value="600">600h</option>
+        </select>
+        <div class="mover-carga-bloqueada-aviso hidden" id="mover-carga-bloqueada-aviso">A carga contratada não pode ser alterada após o início dos apontamentos.</div>
+      </div>
+      <div class="prazo-item">
+        <div class="prazo-label">Data máxima de atendimento</div>
+        <input type="date" class="prazo-data-input" id="mover-data-maxima">
+      </div>
+    </div>
   </div>
 
   <div class="card no-print hidden" id="form-card">
@@ -588,6 +616,7 @@ h1{margin:0;font-size:22px;font-weight:800}
         <div class="sub" id="print-title-sub"></div>
       </div>
       <img src="assets/logo-bp.png" class="bmp hidden" id="print-logo-bp" alt="Brasil Mais Produtivo">
+      <img src="assets/logo-mover.jpg" class="bmp hidden" id="print-logo-mover" alt="MOVER Hands-On">
     </div>
     <div class="print-kpis" id="print-kpis"></div>
     <div class="print-charts">
@@ -620,7 +649,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 <script type="module">
 import { sb } from './js/supabase-client.js';
 import { requireSession, logout } from './js/session.js';
-import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS, PROGRAM_CONFIG } from './js/stage-template.js';
+import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS, PROGRAM_CONFIG, defaultStateMover } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap, addDaysISO, diffDaysISO } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
 import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado } from './js/sgset.js';
@@ -742,19 +771,107 @@ function etapaAllocationJoined(v){
   return etapaIdsOf(v).map(id => `${etapaLabel(id)}: ${Number(snapshots[id] && snapshots[id].horas || 0)}h`).join(' + ');
 }
 
+// Fonte de verdade de "essa assessoria é B+P?" pra toda a UI do programa
+// (logo, porte, prazos) — nunca mostra_logo_bp, que fica só como coluna
+// histórica (ETAPA 2: o antigo toggle manual "Programa Brasil Mais
+// Produtivo" foi removido, então mostra_logo_bp não é mais editável pela
+// interface e não pode mais decidir o que aparece).
+function programaEhBP(){
+  return (assessoriaRow.programa || 'BP') === 'BP';
+}
+function programaEhMover(){
+  return assessoriaRow.programa === 'MOVER';
+}
+
 // Programa MOVER (ETAPA 1 — fundação estrutural): qual template de fases
 // usar pra reconstruir state.etapas. programa ausente/'BP' continua usando
 // STAGE_DEFINITIONS exatamente como sempre — nenhuma mudança de
 // comportamento pro B+P. Uma assessoria MOVER com carga_contratada inválida
-// nunca cai de volta no B+P silenciosamente: lança erro (o boot() já barra
-// isso antes de chegar aqui, mostrando um alerta em vez de renderizar um
-// dashboard com dados errados).
+// (não-null e fora de 200/400/600) nunca cai de volta no B+P silenciosamente:
+// lança erro (o boot() já barra isso antes de chegar aqui, mostrando um
+// alerta em vez de renderizar um dashboard com dados errados).
 function stageTemplateAtivo(){
   const programa = assessoriaRow.programa || 'BP';
   if(programa !== 'MOVER') return STAGE_DEFINITIONS;
-  const modalidade = PROGRAM_CONFIG.MOVER.modalidades[assessoriaRow.carga_contratada];
-  if(!modalidade) throw new Error(`Assessoria MOVER com carga_contratada inválida: ${assessoriaRow.carga_contratada}`);
+  const carga = assessoriaRow.carga_contratada;
+  // MOVER ainda não configurado (ETAPA 2 — carga escolhida depois, dentro
+  // da própria assessoria): F01-F04 com horas zeradas, nunca 200h por
+  // padrão. Ids/nomes são idênticos nas três modalidades, então a 200 serve
+  // só de fonte deles aqui, nunca das horas.
+  if(carga === null || carga === undefined){
+    return PROGRAM_CONFIG.MOVER.modalidades[200].etapas.map(e => ({ ...e, prev: 0, entregaveis: [] }));
+  }
+  const modalidade = PROGRAM_CONFIG.MOVER.modalidades[carga];
+  if(!modalidade) throw new Error(`Assessoria MOVER com carga_contratada inválida: ${carga}`);
   return modalidade.etapas.map(e => ({ ...e, entregaveis: [] }));
+}
+
+// MOVER "ainda não configurado" (carga_contratada null/undefined) precisa
+// que o consultor escolha 200/400/600 antes de continuar — feito dentro da
+// própria assessoria (ETAPA 2), não mais no cadastro. Uma carga não-null
+// inválida já foi barrada mais cedo, no boot() (ver cargaMoverInvalida) —
+// aqui só sobra o caso "de fato ainda não configurado".
+function moverPendenteDeConfiguracao(){
+  const carga = assessoriaRow.carga_contratada;
+  return assessoriaRow.programa === 'MOVER' && (carga === null || carga === undefined);
+}
+
+// "Apontamento real" = execução de fato — nunca planejamento futuro sozinho
+// (visitasPlanejadas não conta aqui, de propósito: trocar a carga antes do
+// 1º apontamento real continua permitido mesmo com planejamento já feito).
+// Checa os dois indicadores que deveriam estar sempre sincronizados entre si
+// (visitas realizadas e o "real" acumulado por fase, que é derivado delas)
+// e trata qualquer um dos dois como sinal de execução — a regra mais segura,
+// pra nunca liberar a troca de carga por uma divergência entre eles.
+function moverPossuiApontamentoReal(){
+  const temVisitaRealizada = Array.isArray(state.visitas) && state.visitas.length > 0;
+  const temHorasReaisEmAlgumaFase = Array.isArray(state.etapas) && state.etapas.some(e => Number(e.real || 0) > 0);
+  return temVisitaRealizada || temHorasReaisEmAlgumaFase;
+}
+
+// Atualiza só o que depende da carga (horas previstas de F01-F04 e o total),
+// preservando o resto do state intacto — visitasPlanejadas, participantes,
+// deslocamentos, printSettings etc. defaultStateMover(carga) é usado só como
+// fonte das horas de cada fase (nunca duplicadas manualmente aqui), tanto
+// pra configuração inicial (state ainda vazio) quanto pra corrigir a carga
+// antes do 1º apontamento real com planejamento futuro já existente.
+function aplicarCargaMoverNoState(carga){
+  const referencia = defaultStateMover(carga);
+  const etapas = state.etapas.map(e => {
+    const def = referencia.etapas.find(r => r.id === e.id);
+    return def ? { ...e, prev: def.prev } : e;
+  });
+  return { ...state, etapas, totalPrevisto: referencia.totalPrevisto };
+}
+
+// Chamada no boot(), depois de qualquer mudança de carga/datas, e no final
+// de renderAll() (pra travar o seletor de carga assim que a 1ª visita real
+// for registrada, sem precisar recarregar a página). Único ponto que decide
+// visibilidade/valores/disabled do container "Configuração do Programa
+// MOVER" — só o consultor responsável real (isRealOwner) edita; gestor e
+// consultor vinculado visualizam.
+function aplicarEstadoConfigMover(){
+  const ehMover = programaEhMover();
+  document.getElementById('config-mover-card').classList.toggle('hidden', !ehMover);
+  if(!ehMover) return;
+
+  const apontamentoReal = moverPossuiApontamentoReal();
+  const pendente = moverPendenteDeConfiguracao();
+  const cargaSelect = document.getElementById('mover-carga-select');
+  cargaSelect.value = assessoriaRow.carga_contratada != null ? String(assessoriaRow.carga_contratada) : '';
+  cargaSelect.disabled = !isRealOwner || apontamentoReal;
+  // Mesmo padrão verde/amarelo dos cards de prazo do B+P (prazo-ok/prazo-
+  // atencao): amarelo enquanto não configurada, verde depois — sem nenhum
+  // cálculo de data envolvido, só reflete se a carga já foi escolhida.
+  document.getElementById('mover-carga-item').className = 'prazo-item ' + (pendente ? 'prazo-atencao' : 'prazo-ok');
+  document.getElementById('mover-carga-bloqueada-aviso').classList.toggle('hidden', !apontamentoReal);
+
+  const dataContratacaoInput = document.getElementById('mover-data-contratacao');
+  const dataMaximaInput = document.getElementById('mover-data-maxima');
+  dataContratacaoInput.value = assessoriaRow.data_contratacao || '';
+  dataMaximaInput.value = assessoriaRow.data_maxima_atendimento || '';
+  dataContratacaoInput.disabled = !isRealOwner;
+  dataMaximaInput.disabled = !isRealOwner;
 }
 
 function ensureProjectSchema(){
@@ -2060,6 +2177,10 @@ function renderAll(){
   renderArchive();
   renderPlanejamento();
   renderPrazosBP();
+  // Trava o seletor de carga MOVER assim que a 1ª visita real for
+  // registrada, sem exigir reload — moverPossuiApontamentoReal() muda como
+  // efeito direto de renderAll() ser chamado depois de registrar uma visita.
+  aplicarEstadoConfigMover();
   saveState();
 }
 
@@ -2146,11 +2267,12 @@ function buildStageProgressGauges(){
 function renderPrint(){
   document.getElementById('print-h1').textContent = assessoriaRow.nome;
   document.getElementById('print-title-sub').textContent =
-    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
+    `${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${programaEhBP() && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h · Emitido em ${fmtDateBR(new Date().toISOString().slice(0,10))}`;
   document.getElementById('print-kpis').innerHTML = buildPrintKPIs();
   document.getElementById('print-chart-stages').innerHTML = buildStageBarChartSVG();
   document.getElementById('print-chart-stage-progress').innerHTML = buildStageProgressGauges();
-  document.getElementById('print-logo-bp').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
+  document.getElementById('print-logo-bp').classList.toggle('hidden', !programaEhBP());
+  document.getElementById('print-logo-mover').classList.toggle('hidden', !programaEhMover());
   const includeDeliverables = Boolean(state.printSettings && state.printSettings.includeDeliverables);
   document.getElementById('print-stage-summary').innerHTML = state.etapas.map(e => {
     const hoursPct = e.prev > 0 ? e.real/e.prev : 0;
@@ -2190,7 +2312,7 @@ function renderPrint(){
 function applyHeaderInfo(){
   document.getElementById('header-title').textContent = assessoriaRow.nome;
   document.getElementById('header-sub').textContent =
-    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${assessoriaRow.mostra_logo_bp && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
+    `${assessoriaRow.cliente_nome ? assessoriaRow.cliente_nome + ' · ' : ''}${assessoriaRow.proposta ? 'Proposta nº ' + assessoriaRow.proposta + ' · ' : ''}${programaEhBP() && assessoriaRow.porte ? 'Porte ' + assessoriaRow.porte + ' · ' : ''}Carga horária total ${state.totalPrevisto}h`;
   document.getElementById('session-email').textContent = session.user.email;
   isRealOwner = session.user.id === assessoriaRow.owner_id;
   const roleBadge = document.getElementById('role-badge');
@@ -2209,17 +2331,21 @@ function applyHeaderInfo(){
     document.getElementById('logo-cliente-img').src = assessoriaRow.logo_url;
     document.getElementById('logo-cliente-box').classList.remove('hidden');
   }
-  document.getElementById('logo-bp-box').classList.toggle('hidden', !assessoriaRow.mostra_logo_bp);
-  document.getElementById('bp-logo-toggle').checked = Boolean(assessoriaRow.mostra_logo_bp);
+  // logo-bp-box depende de programaEhBP(), não mais de mostra_logo_bp (ETAPA
+  // 2: sem o toggle manual, mostra_logo_bp vira só uma coluna histórica —
+  // ver programaEhBP() acima. Isso também evita uma assessoria B+P antiga
+  // com mostra_logo_bp=false (setado manualmente antes desta mudança) ficar
+  // sem logo/identidade depois que o toggle sumir.
+  document.getElementById('logo-bp-box').classList.toggle('hidden', !programaEhBP());
+  document.getElementById('logo-mover-box').classList.toggle('hidden', !programaEhMover());
   document.getElementById('porte-select').value = assessoriaRow.porte || '';
   document.getElementById('field-contratacao').value = assessoriaRow.data_contratacao || '';
 }
 
 function applyRoleUI(){
   document.getElementById('btn-toggle-form').classList.toggle('hidden', !isOwner);
-  document.getElementById('bp-toggle-label').classList.toggle('hidden', !isOwner);
-  document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
-  document.getElementById('prazos-bp-card').classList.toggle('hidden', !isOwner || !assessoriaRow.mostra_logo_bp);
+  document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !programaEhBP());
+  document.getElementById('prazos-bp-card').classList.toggle('hidden', !isOwner || !programaEhBP());
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
   // SGSET é ação exclusiva do dono de fato — nunca do gestor visualizando.
   document.getElementById('btn-selecionar-sgset').classList.toggle('hidden', !isRealOwner);
@@ -2229,12 +2355,17 @@ function applyRoleUI(){
 // Enquanto o B+P estiver ativo e o porte não tiver sido escolhido, trava
 // planejamento e registro de visita — evita repetir a divergência de horas
 // que já aconteceu por planejar em cima do porte errado (ou de nenhum).
+// Nunca se aplica ao MOVER (programaEhBP() é falso lá).
 function porteFaltando(){
-  return isOwner && assessoriaRow.mostra_logo_bp && !assessoriaRow.porte;
+  return isOwner && programaEhBP() && !assessoriaRow.porte;
 }
 function applyPorteGate(){
-  const bloqueado = porteFaltando();
-  document.getElementById('porte-aviso-card').classList.toggle('hidden', !bloqueado);
+  // porteFaltando() e moverPendenteDeConfiguracao() nunca são true ao mesmo
+  // tempo (uma assessoria é B+P ou MOVER, nunca as duas) — cada aviso fica
+  // preso à sua própria condição, só o bloqueio dos botões combina as duas.
+  const bloqueado = porteFaltando() || moverPendenteDeConfiguracao();
+  document.getElementById('porte-aviso-card').classList.toggle('hidden', !porteFaltando());
+  document.getElementById('mover-aviso-pendente-card').classList.toggle('hidden', !moverPendenteDeConfiguracao());
   document.getElementById('btn-toggle-form').disabled = bloqueado;
   document.getElementById('btn-gerar-datas').disabled = bloqueado;
   document.getElementById('btn-selecionar-multiplos').disabled = bloqueado;
@@ -2243,25 +2374,6 @@ function applyPorteGate(){
   document.getElementById('plan-deslocamento').disabled = bloqueado;
   document.querySelectorAll('.plan-weekday').forEach(cb => { cb.disabled = bloqueado; });
 }
-
-document.getElementById('bp-logo-toggle').addEventListener('change', async function(){
-  if(!isOwner) return;
-  const checked = this.checked;
-  document.getElementById('logo-bp-box').classList.toggle('hidden', !checked);
-  const { data: updated, error } = await sb.from('assessorias')
-    .update({ mostra_logo_bp: checked })
-    .eq('id', assessoriaId)
-    .select('updated_at')
-    .single();
-  if(error){
-    alert('Não foi possível salvar essa alteração: ' + error.message);
-    return;
-  }
-  assessoriaRow.mostra_logo_bp = checked;
-  assessoriaRow.updated_at = updated.updated_at;
-  document.getElementById('porte-select').classList.toggle('hidden', !checked);
-  document.getElementById('prazos-bp-card').classList.toggle('hidden', !checked);
-});
 
 // Prazos do B+P (regra de negócio): contados a partir da data de contratação.
 // São só um apoio visual pro consultor — nada aqui bloqueia nenhuma ação.
@@ -2493,6 +2605,98 @@ document.getElementById('porte-select').addEventListener('change', async functio
   renderAll();
 });
 
+// Igual ao porte-select do B+P: salva assim que o valor muda, sem botão de
+// confirmação separado. isRealOwner, não isOwner — gestor acompanhando
+// nunca configura a carga MOVER (só visualiza).
+document.getElementById('mover-carga-select').addEventListener('change', async function(){
+  if(!isRealOwner) return;
+  const valor = this.value;
+  const carga = valor ? Number(valor) : null;
+  const cargaAtual = assessoriaRow.carga_contratada;
+
+  if(carga === cargaAtual){ aplicarEstadoConfigMover(); return; }
+  if(carga === null){
+    // Voltou pro placeholder sem escolher nada — não desconfigura uma carga
+    // já salva, só sincroniza o select de volta com o valor atual.
+    aplicarEstadoConfigMover();
+    return;
+  }
+  if(![200,400,600].includes(carga)){
+    alert('Carga contratada inválida.');
+    aplicarEstadoConfigMover();
+    return;
+  }
+  // Depois do 1º apontamento real, a carga fica definitivamente travada —
+  // planejamento futuro sozinho (visitasPlanejadas) NUNCA bloqueia a troca.
+  if(moverPossuiApontamentoReal()){
+    alert('A carga contratada não pode ser alterada após o início dos apontamentos.');
+    aplicarEstadoConfigMover();
+    return;
+  }
+
+  this.disabled = true;
+  const novoState = aplicarCargaMoverNoState(carga);
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ carga_contratada: carga, data: novoState })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
+  if(error){
+    alert('Não foi possível salvar a carga contratada: ' + error.message);
+    aplicarEstadoConfigMover();
+    return;
+  }
+  assessoriaRow.carga_contratada = carga;
+  assessoriaRow.updated_at = updated.updated_at;
+  state = novoState;
+  applyHeaderInfo();
+  applyPorteGate();
+  renderAll(); // já chama aplicarEstadoConfigMover() no final
+});
+
+// Datas MOVER: mesmo padrão do field-contratacao do B+P (salva no "change"
+// de cada input), mas lendo as duas juntas — nunca persiste uma preenchida
+// sem a outra. Só o consultor responsável real edita (isRealOwner).
+async function salvarDatasMover(){
+  if(!isRealOwner) return;
+  const dataContratacaoInput = document.getElementById('mover-data-contratacao');
+  const dataMaximaInput = document.getElementById('mover-data-maxima');
+  const dc = dataContratacaoInput.value || null;
+  const dm = dataMaximaInput.value || null;
+
+  if((dc === null) !== (dm === null)){
+    // Uma preenchida e a outra ainda não: estado transitório de
+    // preenchimento (ou uma limpeza parcial) — espera em silêncio até as
+    // duas ficarem preenchidas (ou as duas vazias) em vez de interromper o
+    // consultor no meio do preenchimento com um alerta.
+    return;
+  }
+  if(dc && dm && dm < dc){
+    alert('A data máxima de atendimento não pode ser anterior à data de contratação.');
+    dataContratacaoInput.value = assessoriaRow.data_contratacao || '';
+    dataMaximaInput.value = assessoriaRow.data_maxima_atendimento || '';
+    return;
+  }
+  if(dc === (assessoriaRow.data_contratacao || null) && dm === (assessoriaRow.data_maxima_atendimento || null)) return;
+
+  const { data: updated, error } = await sb.from('assessorias')
+    .update({ data_contratacao: dc, data_maxima_atendimento: dm })
+    .eq('id', assessoriaId)
+    .select('updated_at')
+    .single();
+  if(error){
+    alert('Não foi possível salvar as datas: ' + error.message);
+    dataContratacaoInput.value = assessoriaRow.data_contratacao || '';
+    dataMaximaInput.value = assessoriaRow.data_maxima_atendimento || '';
+    return;
+  }
+  assessoriaRow.data_contratacao = dc;
+  assessoriaRow.data_maxima_atendimento = dm;
+  assessoriaRow.updated_at = updated.updated_at;
+}
+document.getElementById('mover-data-contratacao').addEventListener('change', salvarDatasMover);
+document.getElementById('mover-data-maxima').addEventListener('change', salvarDatasMover);
+
 document.getElementById('plan-prev').addEventListener('click', () => {
   let { year, month } = planCalendarBase;
   month -= 1; if(month < 0){ month = 11; year -= 1; }
@@ -2690,8 +2894,15 @@ async function boot(){
   // Nunca renderiza uma assessoria MOVER com carga_contratada inválida como
   // se fosse B+P — barra aqui, antes de qualquer render, em vez de deixar
   // ensureProjectSchema() lançar mais adiante sem contexto pro usuário.
-  if(assessoriaRow.programa === 'MOVER' && !PROGRAM_CONFIG.MOVER.modalidades[assessoriaRow.carga_contratada]){
-    alert('Esta assessoria MOVER está com a carga contratada inválida ou não definida. Contate o suporte.');
+  // null/undefined não entra aqui: é "MOVER ainda não configurado" (ETAPA 2),
+  // um estado válido que stageTemplateAtivo() já sabe renderizar com F01-F04
+  // zeradas — só um valor não-null fora de 200/400/600 é erro de fato.
+  const cargaMover = assessoriaRow.carga_contratada;
+  const cargaMoverInvalida = assessoriaRow.programa === 'MOVER'
+    && cargaMover !== null && cargaMover !== undefined
+    && !PROGRAM_CONFIG.MOVER.modalidades[cargaMover];
+  if(cargaMoverInvalida){
+    alert('Esta assessoria MOVER está com a carga contratada inválida. Contate o suporte.');
     window.location.href = 'painel.html';
     return;
   }
@@ -2718,6 +2929,7 @@ async function boot(){
   ensureProjectSchema();
   applyHeaderInfo();
   applyRoleUI();
+  aplicarEstadoConfigMover();
   document.getElementById('print-deliverables-toggle').checked = Boolean(state.printSettings && state.printSettings.includeDeliverables);
 
   renderFormEtapaOptions();
