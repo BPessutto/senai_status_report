@@ -10,8 +10,16 @@
 <script src="js/supabase-config.js"></script>
 <script type="module">
   import { sb } from './js/supabase-client.js';
-  const { data: { session } } = await sb.auth.getSession();
-  window.location.href = session ? 'painel.html' : 'login.html';
+  import { urlIndicaRecovery } from './js/session.js';
+
+  // Link de recuperação de senha caindo aqui (ex.: Site URL do Supabase
+  // configurado pra raiz do app) nunca deve virar login automático.
+  if (urlIndicaRecovery()) {
+    window.location.href = 'redefinir-senha.html' + window.location.search + window.location.hash;
+  } else {
+    const { data: { session } } = await sb.auth.getSession();
+    window.location.href = session ? 'painel.html' : 'login.html';
+  }
 </script>
 </body>
 </html>

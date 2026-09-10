@@ -59,6 +59,7 @@
 <script src="js/supabase-config.js"></script>
 <script type="module">
   import { sb } from './js/supabase-client.js';
+  import { urlIndicaRecovery } from './js/session.js';
 
   const form = document.getElementById('auth-form');
   const btnSubmit = document.getElementById('btn-submit');
@@ -86,8 +87,16 @@
     msgArea.innerHTML = `<div class="ok-box">${text}</div>`;
   }
 
-  // Se já existe sessão válida, pula direto pro painel.
+  // Link de recuperação de senha caindo aqui nunca deve virar login
+  // automático — mesmo que o client já tenha processado o token da URL e
+  // criado uma sessão (detectSessionInUrl), essa sessão é de recovery, não
+  // de login normal.
   (async () => {
+    if (urlIndicaRecovery()) {
+      window.location.href = 'redefinir-senha.html' + window.location.search + window.location.hash;
+      return;
+    }
+    // Se já existe sessão válida, pula direto pro painel.
     const { data: { session } } = await sb.auth.getSession();
     if (session) window.location.href = 'painel.html';
   })();
