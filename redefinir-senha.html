@@ -99,48 +99,63 @@
     linkInvalidoArea.classList.remove('hidden');
   }
 
-  // supabase-js processa o token de recuperação da URL ao inicializar
-  // (detectSessionInUrl, ligado por padrão) — isso começa a acontecer já na
-  // criação do client em js/supabase-client.js, que roda durante o import
-  // acima, ANTES desta linha. Existe uma janela real de corrida (mais
-  // provável no fluxo PKCE, que troca o "code" por sessão via rede) em que
-  // PASSWORD_RECOVERY pode disparar antes deste listener ser registrado —
-  // por isso o fallback abaixo com getSession() + o marcador da URL, em vez
-  // de depender só deste evento chegar a tempo.
+  // O client já pode começar a processar o token de recuperação da URL
+  // durante a própria criação (detectSessionInUrl, ligado por padrão) — em
+  // js/supabase-client.js, que roda no import acima, ANTES desta linha. Mas
+  // pro fluxo implícito (o usado nos links de recovery deste projeto), o
+  // supabase-js só resolve isso depois de uma chamada de rede própria
+  // (busca o usuário com o access_token da URL) — ou seja, sempre existe uma
+  // janela real antes do evento disparar, e o registro deste listener
+  // (síncrono, geralmente concluído em microssegundos) sempre acontece bem
+  // antes dela. É por isso que confiamos nele como fonte de verdade
+  // principal, em vez de qualquer parsing próprio da URL.
   //
   // Só o evento PASSWORD_RECOVERY confirma recovery — nunca tratamos
   // SIGNED_IN/INITIAL_SESSION isolados como suficientes, pra não liberar a
   // troca de senha com uma sessão comum já logada neste navegador.
   sb.auth.onAuthStateChange((event) => {
     if (event === 'PASSWORD_RECOVERY') { confirmarRecovery(); return; }
-    // Alguns fluxos (principalmente PKCE) podem terminar disparando SIGNED_IN
-    // em vez de PASSWORD_RECOVERY pro mesmo link — só aceita combinado com o
-    // marcador de recovery na URL que originou esta aba.
+    // Alguns fluxos podem terminar disparando SIGNED_IN em vez de
+    // PASSWORD_RECOVERY pro mesmo link — só aceita combinado com o marcador
+    // de recovery na URL que originou esta aba.
     if (event === 'SIGNED_IN' && urlPareceRecovery()) confirmarRecovery();
   });
 
   (async () => {
+    // Erro explícito do próprio Supabase na URL (link já expirado/usado) —
+    // essa é evidência real de falha, direto da fonte; não precisa esperar
+    // nada pra declarar inválido.
     if (urlTemErroRecovery()) { declararInvalido(); return; }
 
-    if (!urlPareceRecovery()) {
-      // Sem marcador de recovery na URL: não é um link de recuperação
-      // (alguém abriu a página direto, ou a sessão comum do navegador não
-      // conta). Nada a esperar.
-      declararInvalido();
-      return;
+    // IMPORTANTE: não declaramos mais "inválido" só porque a URL não tem o
+    // marcador type=recovery no formato que esperamos (regra de negócio:
+    // ausência de marcador não é evidência real de falha, é só uma
+    // suposição nossa sobre o formato exato que o Supabase usa — e esse
+    // formato é o mesmo que o próprio supabase-js já lê internamente pra
+    // decidir se dispara PASSWORD_RECOVERY, então reproduzir esse parsing
+    // aqui só serve pra potencialmente rejeitar um link genuíno por engano).
+    // Se realmente não houver nada de recovery, nenhum evento chega e o
+    // timeout de segurança no final resolve isso mesmo assim.
+
+    // Se a URL indica recovery e o client já processou o token antes deste
+    // ponto (corrida rara em que tudo terminou antes desta linha rodar),
+    // getSession() já reflete isso. Exigimos o marcador aqui também, pelo
+    // mesmo motivo do branch SIGNED_IN acima: nunca aceitar uma sessão comum
+    // já existente neste navegador como se fosse a de recovery.
+    if (urlPareceRecovery()) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) { confirmarRecovery(); return; }
     }
 
-    // A URL indica recovery. Se o client já processou o token antes deste
-    // ponto (corrida com o listener acima), getSession() já reflete isso.
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) { confirmarRecovery(); return; }
-
-    // Ainda não confirmado — mantém "validando" e espera o evento chegar.
-    // Este timeout é só um teto de segurança de UX (ex.: falha de rede
-    // silenciosa no PKCE), não o critério de validade: se o evento chegar
-    // antes, confirmarRecovery()/declararInvalido() já resolveram e este
-    // callback não faz nada (estadoResolvido).
-    setTimeout(declararInvalido, 9000);
+    // Nenhum sinal definitivo ainda — mantém "Validando..." e espera o
+    // evento real chegar. Este timeout é só a rede de segurança final (ex.:
+    // falha de rede silenciosa, ou o evento nunca chega porque não era
+    // mesmo um link de recovery) — nunca o critério de validade em si: se o
+    // evento chegar antes, confirmarRecovery()/declararInvalido() já
+    // resolveram e este callback não faz nada (estadoResolvido). 2 minutos
+    // de folga (pedido explícito), bem acima de qualquer latência de rede
+    // razoável pra essa validação.
+    setTimeout(declararInvalido, 120000);
   })();
 
   form.addEventListener('submit', async (ev) => {

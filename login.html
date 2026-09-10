@@ -115,7 +115,13 @@
       if (error) throw error;
       showOk('Se esse e-mail estiver cadastrado, você vai receber um link de recuperação em instantes. Verifique também a caixa de spam.');
     } catch (err) {
-      showError(err.message || 'Não foi possível solicitar a recuperação agora. Tente novamente em instantes.');
+      // O Supabase devolve esse erro em inglês ("email rate limit exceeded")
+      // quando várias recuperações são pedidas em pouco tempo — traduz pra
+      // uma mensagem amigável em vez de mostrar o texto cru.
+      const mensagemBruta = (err && err.message) || '';
+      showError(/rate limit/i.test(mensagemBruta)
+        ? 'Muitas solicitações de recuperação foram feitas em pouco tempo. Aguarde alguns minutos e tente novamente.'
+        : (mensagemBruta || 'Não foi possível solicitar a recuperação agora. Tente novamente em instantes.'));
     } finally {
       enviandoRecuperacao = false;
     }
