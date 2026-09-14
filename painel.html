@@ -72,7 +72,6 @@
     <div class="header-actions">
       <a class="btn btn-ghost hidden" id="btn-voltar-gestor" href="gestor.html">‹ Painel gerencial</a>
       <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
-      <button class="btn btn-ghost hidden" id="btn-sgset-semanal">Gerar SGSET semanal</button>
       <button class="btn btn-ghost hidden" id="btn-ver-arquivadas">Ver arquivadas</button>
       <button class="btn btn-ghost" id="btn-logout">Sair</button>
     </div>
@@ -140,7 +139,6 @@
   import { defaultState, defaultStateMover } from './js/stage-template.js';
   import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, colorForIndex, nationalHolidayMap } from './js/calendar-utils.js';
   import { showActionPanel } from './js/action-panel.js';
-  import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado, showSgsetSelecao } from './js/sgset.js';
 
   const grid = document.getElementById('grid');
   const emptyState = document.getElementById('empty-state');
@@ -182,10 +180,6 @@
   // consultor que o gestor escolheu acompanhar (?as=). Tudo que hoje usa
   // session.user.id pra decidir "de quem é isso" passa a usar este valor.
   let effectiveUserId = null;
-  // Nome de quem é dono das assessorias mostradas (não de quem está logado) —
-  // usado no texto do SGSET, pra bater com effectiveUserId mesmo quando o
-  // gestor está vendo como outro consultor.
-  let nomeConsultorAtivo = '';
 
   async function carregarConsultoresDisponiveis(){
     const { data, error } = await sb.rpc('list_consultores');
@@ -365,10 +359,6 @@
     // ou alguém vinculado a nenhuma assessoria ainda — nesse caso deixamos o botão de
     // criar visível também.
     btnNova.classList.toggle('hidden', !isOwnerOfSomething && data.length > 0);
-    // SGSET é ação do consultor responsável — nunca do gestor, nem quando
-    // ele está vendo como alguém via ?as= (único jeito de um gestor chegar
-    // nesta página, já que sem ?as= ele é redirecionado pro painel gerencial).
-    document.getElementById('btn-sgset-semanal').classList.toggle('hidden', !isOwnerOfSomething || isGestorUser);
 
     colaboradoresPorAssessoria = new Map();
     if (data.length) {
@@ -431,79 +421,6 @@
       calendarioCard.classList.add('hidden');
     }
   }
-
-  // ============================================================
-  // SGSET — lote semanal (só assessorias próprias; colaboração é read-only)
-  // ============================================================
-  async function abrirPainelSgset(){
-    if (isGestorUser) return;
-    const grupos = ownedAssessoriasSorted
-      .map(a => ({ assessoria: a, visitas: ((a.data && a.data.visitas) || []).filter(visitaSgsetPendente) }))
-      .filter(g => g.visitas.length)
-      .map(g => ({
-        id: g.assessoria.id,
-        titulo: `${escapeAttr(g.assessoria.nome)}${g.assessoria.cliente_nome ? ' · ' + escapeAttr(g.assessoria.cliente_nome) : ''}`,
-        visitas: g.visitas.map(v => ({ id: v.id, dataISO: v.dataISO, horas: Number(v.horasNoDia || 0) }))
-      }));
-
-    await showSgsetSelecao({
-      titulo: 'Lançamentos SGSET',
-      subtitulo: `Consultor: ${escapeAttr(nomeConsultorAtivo)}`,
-      grupos,
-      onGerar: async ({ totalVisitas, porGrupo }) => {
-        const blocos = porGrupo.map(({ grupoId, visitaIds }) => {
-          const assessoria = ownedAssessoriasSorted.find(a => a.id === grupoId);
-          const todasVisitas = (assessoria.data && assessoria.data.visitas) || [];
-          const selecionadas = todasVisitas.filter(v => visitaIds.includes(v.id));
-          const jaEncaminhadas = todasVisitas
-            .filter(v => !visitaSgsetPendente(v))
-            .reduce((s,v) => s + Number(v.horasNoDia || 0), 0);
-          return {
-            clienteNome: assessoria.cliente_nome,
-            projetoNome: assessoria.nome,
-            proposta: assessoria.proposta,
-            totalPrevisto: (assessoria.data && assessoria.data.totalPrevisto) || 0,
-            horasJaEncaminhadas: jaEncaminhadas,
-            visitas: selecionadas.map(v => ({
-              dataISO: v.dataISO,
-              resumo: v.resumo,
-              participantes: participantesDaVisitaParaTexto(v, assessoria.owner_id, () => nomeConsultorAtivo)
-            }))
-          };
-        });
-
-        const { assunto, corpo } = buildSgsetTexto({ consultorNome: nomeConsultorAtivo, dataGeracao: todayISO(), blocos });
-        const totalHoras = blocos.reduce((s,b) => s + b.visitas.reduce((s2,v) => s2 + v.participantes.reduce((s3,p) => s3 + p.horas, 0), 0), 0);
-
-        await showSgsetResultado({
-          assunto, corpo, totalVisitas, totalHoras,
-          onConfirmarEnvio: async () => {
-            for (const { grupoId, visitaIds } of porGrupo) {
-              const assessoria = ownedAssessoriasSorted.find(a => a.id === grupoId);
-              const novaData = JSON.parse(JSON.stringify(assessoria.data));
-              novaData.visitas = (novaData.visitas || []).map(v => visitaIds.includes(v.id)
-                ? { ...v, sgset: { status:'enviado', enviadoEm: new Date().toISOString(), enviadoPor: { id: session.user.id, nome: meuNome } } }
-                : v);
-              const { data: updated, error } = await sb.from('assessorias')
-                .update({ data: novaData })
-                .eq('id', assessoria.id)
-                .eq('updated_at', assessoria.updated_at)
-                .select('updated_at')
-                .maybeSingle();
-              if (error || !updated) {
-                alert(`Não foi possível marcar "${assessoria.nome}" como encaminhada — ela pode ter sido alterada em outro lugar. Recarregue a página e tente de novo.`);
-                continue;
-              }
-              assessoria.data = novaData;
-              assessoria.updated_at = updated.updated_at;
-            }
-            loadAssessorias();
-          }
-        });
-      }
-    });
-  }
-  document.getElementById('btn-sgset-semanal').addEventListener('click', abrirPainelSgset);
 
   // ============================================================
   // Banco de horas de deslocamento
@@ -1046,12 +963,10 @@
     if (viewAsId) {
       const { data: perfilConsultor } = await sb.from('profiles').select('nome,email').eq('id', viewAsId).maybeSingle();
       const nomeConsultor = (perfilConsultor && (perfilConsultor.nome || perfilConsultor.email)) || 'consultor';
-      nomeConsultorAtivo = nomeConsultor;
       document.getElementById('page-title').textContent = `Assessorias de ${nomeConsultor}`;
       document.getElementById('user-email').textContent = `Visualizando como gestor · ${session.user.email}`;
       document.getElementById('btn-voltar-gestor').classList.remove('hidden');
     } else {
-      nomeConsultorAtivo = meuNome;
       document.getElementById('user-email').textContent = session.user.email;
     }
 
