@@ -30,7 +30,7 @@
   .cal-month-title{font-weight:800;color:var(--navy);text-align:center;margin-bottom:8px;font-size:13px}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
   .cal-grid-head{margin-bottom:4px}
-  .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:6px;color:var(--text)}
+  .cal-cell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:6px;color:var(--text)}
   .cal-head{font-weight:800;font-size:9.5px;color:var(--muted);text-transform:uppercase;aspect-ratio:auto}
   .cal-empty{background:transparent}
   .cal-today{outline:2px solid var(--blue);outline-offset:-2px;font-weight:800}
@@ -40,6 +40,10 @@
   .cal-cell:not(.cal-empty):not(.cal-head):hover{filter:brightness(.95)}
   .cal-cell[data-clickable]{cursor:pointer}
   .cal-cell[data-clickable]:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  /* Diagnóstico no calendário: marcador independente (bolinha no canto),
+     nunca a cor de fundo da célula — assim nunca disputa com nem esconde
+     visita/compensação/feriado/arquivada, só "empilha" por cima. */
+  .cal-cell.cal-has-diag::after{content:'';position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#0d9488;box-shadow:0 0 0 1px #fff}
   .banco-note-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);margin-bottom:8px}
   .banco-linha{font-size:12.5px;color:var(--muted);margin-bottom:6px}
   .banco-linha-item{font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:4px}
@@ -55,6 +59,28 @@
   .consultores-lista input{width:15px;height:15px}
   .consultores-vazio{padding:8px;font-size:12.5px;color:var(--muted)}
   .consultores-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--navy);background:#eef1f5;padding:3px 8px;border-radius:var(--radius-pill);margin-top:6px;width:fit-content}
+
+  .link-btn{border:0;background:none;color:var(--blue);font-size:11.5px;font-weight:700;cursor:pointer;padding:0}
+  .link-btn:hover{text-decoration:underline}
+  .link-btn-danger{color:var(--danger)}
+
+  .horas-quick-row{display:flex;gap:6px;align-items:center}
+  .horas-quick-row input{flex:1}
+
+  /* Lista de Diagnósticos — mesma ideia de tabela responsiva já usada em
+     apoio.html: colunas no desktop, empilhada com rótulo em telas estreitas. */
+  .diag-table{display:flex;flex-direction:column;gap:8px}
+  .diag-table-head{display:grid;grid-template-columns:1.2fr .65fr .8fr .8fr .55fr 2fr .95fr;gap:12px;padding:0 12px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .diag-row{display:grid;grid-template-columns:1.2fr .65fr .8fr .8fr .55fr 2fr .95fr;gap:12px;align-items:center;background:#fbfcfe;border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  .diag-cell-desc{font-size:12.5px;color:var(--text);overflow-wrap:anywhere}
+  .diag-cell-actions{display:flex;gap:10px;justify-content:flex-end}
+
+  @media(max-width:820px){
+    .diag-table-head{display:none}
+    .diag-row{grid-template-columns:1fr;gap:6px}
+    .diag-row>div[data-label]::before{content:attr(data-label);display:block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:2px}
+    .diag-cell-actions{justify-content:flex-start}
+  }
 </style>
 </head>
 <body>
@@ -72,6 +98,7 @@
     <div class="header-actions">
       <a class="btn btn-ghost hidden" id="btn-voltar-gestor" href="gestor.html">‹ Painel gerencial</a>
       <button class="btn btn-primary hidden" id="btn-nova">+ Nova assessoria</button>
+      <button class="btn btn-ghost hidden" id="btn-diagnostico">+ Diagnóstico</button>
       <button class="btn btn-ghost hidden" id="btn-ver-arquivadas">Ver arquivadas</button>
       <button class="btn btn-ghost" id="btn-logout">Sair</button>
     </div>
@@ -80,6 +107,11 @@
   <div id="grid-titulo" class="hidden" style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 -6px"></div>
   <div id="grid" class="grid"></div>
   <div id="empty-state" class="empty-state hidden"></div>
+
+  <div class="card hidden" id="diagnosticos-card">
+    <div class="card-title"><span>Diagnósticos</span></div>
+    <div id="diagnosticos-list"></div>
+  </div>
 
   <div class="card hidden" id="calendario-card">
     <div class="card-title">
@@ -126,6 +158,55 @@
       <div class="modal-actions">
         <button type="button" class="btn" id="btn-cancelar-nova">Cancelar</button>
         <button type="submit" class="btn btn-primary" id="btn-salvar-nova">Criar assessoria</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-diagnostico">
+  <div class="modal-box">
+    <h2 id="modal-diagnostico-titulo">Novo diagnóstico</h2>
+    <form id="form-diagnostico">
+      <div class="field">
+        <label for="diag-empresa">Empresa</label>
+        <input type="text" id="diag-empresa" placeholder="Ex.: XPTO Indústria Ltda." required>
+      </div>
+      <div class="field">
+        <label for="diag-cidade">Cidade</label>
+        <input type="text" id="diag-cidade" placeholder="Ex.: Ribeirão Preto - SP" required>
+      </div>
+      <div class="field">
+        <label for="diag-proposta">Proposta</label>
+        <input type="text" id="diag-proposta" placeholder="Ex.: 186/2026" required>
+      </div>
+      <div class="field">
+        <label for="diag-programa">Programa</label>
+        <select id="diag-programa" required>
+          <option value="" disabled selected>Selecione…</option>
+          <option value="BP">Brasil + Produtivo</option>
+          <option value="MOVER">MOVER – HandsOn</option>
+          <option value="JTD">Jornada de Transformação Digital</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="diag-data">Data</label>
+        <input type="date" id="diag-data" required>
+      </div>
+      <div class="field">
+        <label for="diag-horas">Horas</label>
+        <div class="horas-quick-row">
+          <input type="number" id="diag-horas" min="0.5" step="0.5" required>
+          <button type="button" class="btn btn-sm" data-horas-quick="4">4h</button>
+          <button type="button" class="btn btn-sm" data-horas-quick="8">8h</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="diag-descricao">Descrição / observação (opcional)</label>
+        <textarea id="diag-descricao" rows="3" placeholder="Ex.: Levantamento inicial de processos…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="btn-cancelar-diagnostico">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="btn-salvar-diagnostico">Salvar diagnóstico</button>
       </div>
     </form>
   </div>
@@ -180,6 +261,14 @@
   // consultor que o gestor escolheu acompanhar (?as=). Tudo que hoje usa
   // session.user.id pra decidir "de quem é isso" passa a usar este valor.
   let effectiveUserId = null;
+
+  // Diagnóstico (public.atividades_consultor, tipo='diagnostico') — registro
+  // simples, sem dashboard próprio. Gestor só lê (RLS: sem policy de
+  // escrita), por isso toda ação de criar/editar/excluir é condicionada a
+  // !isGestorUser tanto na renderização quanto no envio do formulário.
+  let diagnosticos = [];
+  let editingDiagnosticoId = null;
+  const PROGRAMA_LABEL = { BP: 'Brasil + Produtivo', MOVER: 'MOVER – HandsOn', JTD: 'Jornada de Transformação Digital' };
 
   async function carregarConsultoresDisponiveis(){
     const { data, error } = await sb.rpc('list_consultores');
@@ -399,7 +488,9 @@
 
     const temColaboracao = data.some(r => r.owner_id !== effectiveUserId);
     const calendarioCard = document.getElementById('calendario-card');
-    if ((isOwnerOfSomething || temColaboracao) && !mostrarArquivadas) {
+    // diagnosticos.length entra aqui pra o calendário aparecer mesmo pra
+    // quem não tem (ou ainda não tem) nenhuma assessoria, só diagnóstico.
+    if ((isOwnerOfSomething || temColaboracao || diagnosticos.length) && !mostrarArquivadas) {
       ownedAssessoriasSorted = ativas
         .filter(r => r.owner_id === effectiveUserId)
         .sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
@@ -420,6 +511,115 @@
     } else {
       calendarioCard.classList.add('hidden');
     }
+  }
+
+  // ============================================================
+  // Diagnóstico (public.atividades_consultor, tipo='diagnostico')
+  // ============================================================
+  function programaBadgeHtml(programa){
+    const rotulo = PROGRAMA_LABEL[programa] || programa;
+    return `<span class="badge" style="color:var(--navy);background:#eef1f5" title="${escapeAttr(rotulo)}">${escapeAttr(programa)}</span>`;
+  }
+
+  function renderDiagnosticoRow(d){
+    const podeEditar = !isGestorUser;
+    const descricaoResumo = d.descricao
+      ? (d.descricao.length > 80 ? d.descricao.slice(0, 80) + '…' : d.descricao)
+      : '—';
+    return `
+      <div class="diag-row">
+        <div data-label="Empresa"><strong>${escapeAttr(d.empresa_nome)}</strong></div>
+        <div data-label="Programa">${programaBadgeHtml(d.programa)}</div>
+        <div data-label="Proposta">${escapeAttr(d.proposta || '—')}</div>
+        <div data-label="Data">${fmtDateBR(d.data_inicio)}</div>
+        <div data-label="Horas">${d.horas}h</div>
+        <div data-label="Descrição" class="diag-cell-desc" title="${escapeAttr(d.descricao || '')}">${escapeAttr(descricaoResumo)}</div>
+        <div data-label="Ação" class="diag-cell-actions">
+          ${podeEditar ? `<button type="button" class="link-btn" data-editar-diag="${d.id}">Editar</button>
+          <button type="button" class="link-btn link-btn-danger" data-excluir-diag="${d.id}">Excluir</button>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderDiagnosticos(){
+    const wrap = document.getElementById('diagnosticos-list');
+    document.getElementById('diagnosticos-card').classList.remove('hidden');
+    if (!diagnosticos.length) {
+      wrap.innerHTML = '<div class="empty-state" style="padding:18px 10px">Nenhum diagnóstico registrado ainda.</div>';
+      return;
+    }
+    const header = `
+      <div class="diag-table-head">
+        <div>Empresa</div><div>Programa</div><div>Proposta</div><div>Data</div><div>Horas</div><div>Descrição</div><div></div>
+      </div>`;
+    wrap.innerHTML = `<div class="diag-table">${header}${diagnosticos.map(renderDiagnosticoRow).join('')}</div>`;
+    if (!isGestorUser) {
+      wrap.querySelectorAll('[data-editar-diag]').forEach(btn => {
+        btn.addEventListener('click', () => openDiagnosticoModal(diagnosticos.find(d => d.id === btn.dataset.editarDiag)));
+      });
+      wrap.querySelectorAll('[data-excluir-diag]').forEach(btn => {
+        btn.addEventListener('click', () => excluirDiagnostico(btn.dataset.excluirDiag));
+      });
+    }
+  }
+
+  async function loadDiagnosticos(){
+    const { data, error } = await sb.from('atividades_consultor')
+      .select('*')
+      .eq('tipo', 'diagnostico')
+      .eq('owner_id', effectiveUserId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      document.getElementById('diagnosticos-card').classList.remove('hidden');
+      document.getElementById('diagnosticos-list').innerHTML = `<div class="error-box">Não foi possível carregar os diagnósticos: ${escapeAttr(error.message)}</div>`;
+      return;
+    }
+    diagnosticos = data || [];
+    renderDiagnosticos();
+  }
+
+  function openDiagnosticoModal(row){
+    if (isGestorUser) return;
+    editingDiagnosticoId = row ? row.id : null;
+    document.getElementById('modal-diagnostico-titulo').textContent = row ? 'Editar diagnóstico' : 'Novo diagnóstico';
+    document.getElementById('btn-salvar-diagnostico').textContent = row ? 'Salvar alterações' : 'Salvar diagnóstico';
+    document.getElementById('diag-empresa').value = row ? row.empresa_nome : '';
+    document.getElementById('diag-cidade').value = row ? (row.cidade || '') : '';
+    document.getElementById('diag-proposta').value = row ? (row.proposta || '') : '';
+    document.getElementById('diag-programa').value = row ? row.programa : '';
+    document.getElementById('diag-data').value = row ? row.data_inicio : '';
+    document.getElementById('diag-horas').value = row ? row.horas : '';
+    document.getElementById('diag-descricao').value = row ? (row.descricao || '') : '';
+    document.getElementById('modal-diagnostico').classList.remove('hidden');
+  }
+
+  function closeDiagnosticoModal(){
+    editingDiagnosticoId = null;
+    document.getElementById('form-diagnostico').reset();
+    document.getElementById('modal-diagnostico').classList.add('hidden');
+  }
+
+  async function excluirDiagnostico(id){
+    if (isGestorUser) return;
+    const d = diagnosticos.find(x => x.id === id);
+    if (!d) return;
+    const confirmado = await showActionPanel({
+      title: 'Excluir diagnóstico?',
+      subtitle: `"${escapeAttr(d.empresa_nome)}" · ${fmtDateBR(d.data_inicio)} · ${d.horas}h — essa ação não pode ser desfeita.`,
+      actions: [
+        { label: 'Excluir definitivamente', style: 'danger', value: 'sim' },
+        { label: 'Cancelar', style: 'ghost', value: 'nao' }
+      ]
+    });
+    if (!confirmado || confirmado.action !== 'sim') return;
+    const { error } = await sb.from('atividades_consultor').delete().eq('id', id);
+    if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+    // loadAssessorias() de novo (não só loadDiagnosticos()) porque é ela
+    // quem decide se o card do calendário fica visível e redesenha as
+    // bolinhas — precisa da lista de diagnósticos já atualizada antes.
+    await loadDiagnosticos();
+    await loadAssessorias();
   }
 
   // ============================================================
@@ -587,6 +787,22 @@
         cls += ' cal-arquivada';
         title = `Encerrada: ${arquivada.assessoria.nome} — ${arquivada.horas}h (arquivada)`;
       }
+      // Diagnóstico é um marcador à parte (bolinha), nunca troca a cor de
+      // fundo já decidida acima — por isso vem depois e só soma ao título,
+      // em vez de entrar na cadeia if/else de cima.
+      const diagHoje = diagnosticos.filter(dg => dg.data_inicio === iso);
+      if (diagHoje.length) {
+        cls += ' cal-has-diag';
+        const diagTitle = diagHoje.map(dg => [
+          'Diagnóstico',
+          `Empresa: ${dg.empresa_nome}`,
+          `Programa: ${PROGRAMA_LABEL[dg.programa] || dg.programa}`,
+          `Proposta: ${dg.proposta || '—'}`,
+          `Horas: ${dg.horas}h`,
+          dg.descricao ? `Descrição: ${dg.descricao}` : null
+        ].filter(Boolean).join('\n')).join('\n\n');
+        title = title ? `${title}\n\n${diagTitle}` : diagTitle;
+      }
       return `<div class="${cls}" ${style} data-date="${iso}" data-clickable role="button" tabindex="0" title="${escapeAttr(title)}">${d}</div>`;
     }).join('');
     return `<div class="cal-month">
@@ -602,7 +818,8 @@
     legenda.innerHTML = [...ownedAssessoriasSorted, ...colaboracaoAssessoriasSorted].map(a => `<span><i style="background:${colorForIndex(colorMap.get(a.id) || 0)}"></i>${escapeAttr(a.nome)}${a.cliente_nome ? ' – ' + escapeAttr(a.cliente_nome) : ''}</span>`).join('')
       + `<span><i style="background:var(--compbg)"></i>Compensação</span>`
       + `<span><i style="background:#fef3c7"></i>Feriado</span>`
-      + ((arquivadasParaCalendario.length || colaboracaoArquivadasParaCalendario.length) ? `<span><i style="background:#e2e8f0"></i>Encerrada (arquivada)</span>` : '');
+      + ((arquivadasParaCalendario.length || colaboracaoArquivadasParaCalendario.length) ? `<span><i style="background:#e2e8f0"></i>Encerrada (arquivada)</span>` : '')
+      + (diagnosticos.length ? `<span><i style="background:#0d9488;border-radius:50%"></i>Diagnóstico</span>` : '');
     const meses = document.getElementById('calendario-meses');
     let html = '';
     for (let m = 0; m < 12; m++) html += renderMesConsolidado(calendarYear, m);
@@ -723,6 +940,27 @@
         ]
       });
       if (result && result.action === 'abrir') window.location.href = `dashboard.html?id=${arquivada.assessoria.id}`;
+      return;
+    }
+    // Diagnóstico só entra aqui — se o dia já caiu em algum dos ramos acima
+    // (assessoria/compensação/feriado/arquivada), aquele painel já abriu e
+    // já retornou; isso evita duas ações concorrentes pro mesmo clique. A
+    // bolinha e o tooltip continuam mostrando o diagnóstico nesses dias
+    // mesmo assim — só o clique-detalhe prioriza o item com ação associada.
+    const diagHoje = diagnosticos.filter(dg => dg.data_inicio === iso);
+    if (diagHoje.length) {
+      await showActionPanel({
+        title: fmtDateBR(iso),
+        subtitle: diagHoje.map(dg => [
+          'Diagnóstico',
+          `Empresa: ${dg.empresa_nome}`,
+          `Programa: ${PROGRAMA_LABEL[dg.programa] || dg.programa}`,
+          `Proposta: ${dg.proposta || '—'}`,
+          `Horas: ${dg.horas}h`,
+          dg.descricao ? `Descrição: ${dg.descricao}` : null
+        ].filter(Boolean).join('\n')).join('\n\n'),
+        actions: [{ label:'Fechar', style:'ghost' }]
+      });
       return;
     }
 
@@ -930,6 +1168,61 @@
     }
   });
 
+  document.getElementById('btn-diagnostico').addEventListener('click', () => openDiagnosticoModal(null));
+  document.getElementById('btn-cancelar-diagnostico').addEventListener('click', closeDiagnosticoModal);
+  document.querySelectorAll('[data-horas-quick]').forEach(btn => {
+    btn.addEventListener('click', () => { document.getElementById('diag-horas').value = btn.dataset.horasQuick; });
+  });
+  document.getElementById('form-diagnostico').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (isGestorUser) return;
+    const btnSalvar = document.getElementById('btn-salvar-diagnostico');
+    if (btnSalvar.disabled) return;
+
+    const empresa_nome = document.getElementById('diag-empresa').value.trim();
+    const cidade = document.getElementById('diag-cidade').value.trim();
+    const proposta = document.getElementById('diag-proposta').value.trim();
+    const programa = document.getElementById('diag-programa').value;
+    const data_inicio = document.getElementById('diag-data').value;
+    const horas = Number(document.getElementById('diag-horas').value);
+    const descricao = document.getElementById('diag-descricao').value.trim();
+
+    if (!empresa_nome || !cidade || !proposta || !programa || !data_inicio || !Number.isFinite(horas) || horas <= 0) {
+      alert('Preencha empresa, cidade, proposta, programa, data e um número de horas válido (maior que zero).');
+      return;
+    }
+
+    btnSalvar.disabled = true;
+    try {
+      const payload = {
+        owner_id: effectiveUserId,
+        tipo: 'diagnostico',
+        empresa_nome,
+        cidade,
+        proposta,
+        programa,
+        data_inicio,
+        data_fim: null,
+        horas,
+        descricao: descricao || null
+      };
+      if (editingDiagnosticoId) {
+        const { error } = await sb.from('atividades_consultor').update(payload).eq('id', editingDiagnosticoId);
+        if (error) { alert('Não foi possível salvar as alterações: ' + error.message); return; }
+      } else {
+        const { error } = await sb.from('atividades_consultor').insert(payload);
+        if (error) { alert('Não foi possível salvar o diagnóstico: ' + error.message); return; }
+      }
+      closeDiagnosticoModal();
+      // loadAssessorias() de novo: é ela quem decide se o card do
+      // calendário fica visível e redesenha as bolinhas de diagnóstico.
+      await loadDiagnosticos();
+      await loadAssessorias();
+    } finally {
+      btnSalvar.disabled = false;
+    }
+  });
+
   emptyState.textContent = 'Carregando suas assessorias…';
   emptyState.classList.remove('hidden');
 
@@ -970,7 +1263,16 @@
       document.getElementById('user-email').textContent = session.user.email;
     }
 
+    // Diagnóstico é ação exclusiva do dono de fato — gestor (sempre em modo
+    // ?as= nesta página) só enxerga a lista, nunca o botão de criar.
+    document.getElementById('btn-diagnostico').classList.toggle('hidden', isGestorUser);
+
     await carregarConsultoresDisponiveis();
+    // loadDiagnosticos() precisa rodar antes de loadAssessorias(): o
+    // calendário (renderizado dentro de loadAssessorias()) já lê o array
+    // diagnosticos na primeira renderização, pra decidir se aparece mesmo
+    // sem nenhuma assessoria e pra desenhar as bolinhas desde o início.
+    await loadDiagnosticos();
     await loadAssessorias();
   })();
 </script>

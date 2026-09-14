@@ -778,6 +778,137 @@ $$;
 revoke all on function public.cancelar_lancamento_pendente(uuid) from public;
 grant execute on function public.cancelar_lancamento_pendente(uuid) to authenticated;
 
+-- ============================================================
+-- Diagnóstico e Prospecção (public.atividades_consultor)
+--
+-- Registro simples de serviço do consultor que não é uma assessoria:
+-- não tem fases, entregáveis, planejamento de visitas nem painel próprio.
+-- Uma tabela só, com "tipo" discriminando 'diagnostico'/'prospeccao' — os
+-- dois compartilham owner/empresa/cidade/observação; a diferença real está
+-- em quais campos são obrigatórios, resolvido com check constraints
+-- condicionais por tipo, não com duas tabelas.
+--
+-- data_fim fica sempre NULL para diagnóstico (a "Data" do formulário é só
+-- data_inicio) — evita duplicar a mesma data em duas colunas; só prospecção
+-- usa o par data_inicio/data_fim como período.
+-- ============================================================
+create table if not exists public.atividades_consultor (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  tipo text not null,
+  empresa_nome text not null,
+  cidade text,
+  proposta text,
+  programa text,
+  ponto_focal text,
+  telefone text,
+  data_inicio date,
+  data_fim date,
+  horas numeric,
+  descricao text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  constraint atividades_consultor_tipo_chk
+    check (tipo in ('diagnostico','prospeccao')),
+
+  -- programa aceita NULL (prospecção não usa) mas, quando preenchido, só os
+  -- 3 valores canônicos — nomes por extenso (ex.: "Brasil + Produtivo")
+  -- existem só na UI, nunca aqui.
+  constraint atividades_consultor_programa_chk
+    check (programa is null or programa in ('BP','MOVER','JTD')),
+
+  -- quando informado (nos dois tipos), horas sempre positivo.
+  constraint atividades_consultor_horas_chk
+    check (horas is null or horas > 0),
+
+  -- quando os dois estão preenchidos, data_fim nunca antes de data_inicio.
+  constraint atividades_consultor_periodo_chk
+    check (data_fim is null or data_inicio is null or data_fim >= data_inicio),
+
+  -- diagnóstico: cidade, proposta, programa, data e horas são obrigatórios;
+  -- data_fim fica de fora de propósito (só prospecção usa período).
+  constraint atividades_consultor_diagnostico_chk
+    check (
+      tipo <> 'diagnostico'
+      or (
+        cidade is not null
+        and proposta is not null
+        and programa is not null
+        and data_inicio is not null
+        and data_fim is null
+        and horas is not null
+      )
+    ),
+
+  -- prospecção: ponto focal, telefone, cidade e o período completo são
+  -- obrigatórios; proposta/programa (coisas de diagnóstico) ficam de fora;
+  -- horas ainda não é contabilizada nesta primeira versão, então tem que
+  -- ficar NULL (evita registro "meio preenchido" que confundiria uma
+  -- eventual integração futura com ocupação).
+  constraint atividades_consultor_prospeccao_chk
+    check (
+      tipo <> 'prospeccao'
+      or (
+        ponto_focal is not null and telefone is not null and cidade is not null
+        and data_inicio is not null and data_fim is not null
+        and proposta is null and programa is null and horas is null
+      )
+    )
+);
+
+create index if not exists atividades_consultor_owner_idx on public.atividades_consultor (owner_id);
+create index if not exists atividades_consultor_tipo_idx on public.atividades_consultor (tipo);
+create index if not exists atividades_consultor_programa_idx on public.atividades_consultor (programa);
+create index if not exists atividades_consultor_data_inicio_idx on public.atividades_consultor (data_inicio);
+
+-- Mesmo helper de updated_at já usado em assessorias — nenhuma função nova.
+drop trigger if exists atividades_consultor_set_updated_at on public.atividades_consultor;
+create trigger atividades_consultor_set_updated_at
+before update on public.atividades_consultor
+for each row execute function public.set_updated_at();
+
+alter table public.atividades_consultor enable row level security;
+
+-- Consultor: CRUD completo, mas só nos próprios registros — 4 policies
+-- separadas (em vez de "for all") pra deixar cada operação nomeada e
+-- auditável por si só.
+drop policy if exists "atividades_consultor: owner select" on public.atividades_consultor;
+create policy "atividades_consultor: owner select"
+  on public.atividades_consultor
+  for select
+  using (owner_id = auth.uid());
+
+drop policy if exists "atividades_consultor: owner insert" on public.atividades_consultor;
+create policy "atividades_consultor: owner insert"
+  on public.atividades_consultor
+  for insert
+  with check (owner_id = auth.uid());
+
+drop policy if exists "atividades_consultor: owner update" on public.atividades_consultor;
+create policy "atividades_consultor: owner update"
+  on public.atividades_consultor
+  for update
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+drop policy if exists "atividades_consultor: owner delete" on public.atividades_consultor;
+create policy "atividades_consultor: owner delete"
+  on public.atividades_consultor
+  for delete
+  using (owner_id = auth.uid());
+
+-- Gestor: só leitura, de propósito (mesmo espírito documentado de
+-- gestor.html nunca escrever no banco) — sem policy de insert/update/delete.
+drop policy if exists "atividades_consultor: gestor select" on public.atividades_consultor;
+create policy "atividades_consultor: gestor select"
+  on public.atividades_consultor
+  for select
+  using (public.is_gestor());
+
+-- Apoio: nenhuma policy aqui — zero acesso, nem leitura. Diagnóstico e
+-- Prospecção não têm nada a ver com a fila de lançamentos do SGSET.
+
 commit;
 
 -- Fim do schema.
