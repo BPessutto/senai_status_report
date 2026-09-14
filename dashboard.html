@@ -210,12 +210,7 @@ h1{margin:0;font-size:22px;font-weight:800}
 .link-btn{border:0;background:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:0}
 .link-btn:hover{text-decoration:underline}
 .link-btn-danger{color:var(--danger)}
-.link-btn-sgset-ok{color:var(--green)}
-.sgset-status{display:inline-block;font-size:10.5px;font-weight:800;margin-top:8px}
-.sgset-status.sgset-pendente{color:var(--muted)}
-.sgset-status.sgset-ok{color:var(--green)}
-.archive-select-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;cursor:pointer}
-.archive-select-check input{width:15px;height:15px}
+.lanc-badge-row{margin-top:8px}
 .archive-text p{font-size:13px;line-height:1.6;margin:0 0 10px;color:#222}
 .archive-text p:last-child{margin-bottom:0}
 .archive-latest{background:#f3f8fd;border-radius:var(--radius-sm);margin:0 -10px;padding:16px 10px !important}
@@ -598,12 +593,6 @@ h1{margin:0;font-size:22px;font-weight:800}
   <div class="card no-print">
     <div class="card-title">
       <span>Histórico de visitas</span>
-      <button type="button" class="btn btn-xs hidden" id="btn-selecionar-sgset">☑ Selecionar para SGSET</button>
-    </div>
-    <div id="archive-bulk-bar" class="plan-bulk-bar hidden">
-      <span id="archive-bulk-count">0 visita(s) selecionada(s)</span>
-      <button type="button" class="btn btn-xs btn-primary" id="btn-archive-gerar-sgset">Gerar SGSET</button>
-      <button type="button" class="btn btn-xs" id="btn-archive-cancelar-sgset">Cancelar</button>
     </div>
     <div id="archive-list"></div>
   </div>
@@ -652,7 +641,6 @@ import { requireSession, logout } from './js/session.js';
 import { STAGE_DEFINITIONS, PROJECT_SCHEMA_VERSION, applyPorteHours, computeFasePrevisoes, PRAZO_APONTAMENTO_DIAS, PRAZO_ENCERRAMENTO_DIAS, PROGRAM_CONFIG, defaultStateMover } from './js/stage-template.js';
 import { WEEKDAY_LABELS, MONTH_NAMES, todayISO, fmtDateBR, buildMonthGrid, parseBRDateToISO, nationalHolidayMap, addDaysISO, diffDaysISO } from './js/calendar-utils.js';
 import { showActionPanel } from './js/action-panel.js';
-import { visitaSgsetPendente, participantesDaVisitaParaTexto, buildSgsetTexto, showSgsetResultado } from './js/sgset.js';
 
 document.getElementById('btn-logout').addEventListener('click', logout);
 
@@ -665,13 +653,13 @@ if (!assessoriaId) {
 let session = null;
 let assessoriaRow = null;
 let isOwner = false;
-// isOwner inclui gestor (comportamento pré-existente, fora do escopo do
-// SGSET). SGSET é ação exclusiva do dono de fato — usa isRealOwner, nunca
-// isOwner, pra gerar/marcar/reabrir.
+// isOwner inclui gestor. "Enviar para lançamento"/cancelar lançamento são
+// ações exclusivas do dono de fato — usam isRealOwner, nunca isOwner.
 let isRealOwner = false;
 let isGestorUser = false;
 let state = null;
 let editingId = null;
+let lancamentos = [];
 let meuNome = '';
 let colaboradoresDaAssessoria = [];
 let consultoresParaPlanejamento = [];
@@ -1233,11 +1221,44 @@ function renderStageBars(porFase){
   }).join('');
 }
 
-// Seleção múltipla pra SGSET no histórico — mesmo padrão de "modo de
-// seleção + barra de ação" já usado no planejamento de visitas, só que em
-// cima de state.visitas (realizadas) em vez de visitasPlanejadas.
-let selecaoSgsetAtiva = false;
-const selecionadosSgset = new Set();
+// --- Lançamentos (public.lancamentos) --------------------------------
+// Substitui o antigo fluxo SGSET (texto pra copiar/baixar, status v.sgset
+// no JSONB). Status é sempre derivado ao vivo daqui, nunca gravado na
+// visita. Dados antigos de v.sgset (se existirem) não são lidos nem
+// apagados — ficam só como histórico morto no JSONB.
+function lancamentosDaVisita(visitaId){
+  return lancamentos.filter(l => l.visita_id === visitaId);
+}
+function lancamentosAtivosDaVisita(visitaId){
+  return lancamentosDaVisita(visitaId).filter(l => l.status !== 'cancelado');
+}
+// nenhuma linha ativa (nunca enviado, ou tudo cancelado) -> 'nenhum';
+// alguma ativa 'pendente' -> 'pendente'; todas ativas 'consolidado' -> 'consolidado'.
+function statusLancamentoVisita(visitaId){
+  const ativos = lancamentosAtivosDaVisita(visitaId);
+  if(!ativos.length) return { tipo:'nenhum' };
+  if(ativos.some(l => l.status === 'pendente')) return { tipo:'pendente' };
+  const maisRecente = ativos.reduce((a,b) => (!a || (b.consolidado_em||'') > (a.consolidado_em||'')) ? b : a, null);
+  return { tipo:'consolidado', consolidadoEm: maisRecente && maisRecente.consolidado_em, consolidadoPor: maisRecente && maisRecente.consolidado_por_nome };
+}
+function lancamentoBadgeHtml(info){
+  if(info.tipo === 'nenhum') return '';
+  if(info.tipo === 'pendente') return `<span class="badge" style="color:var(--amber);background:var(--amberbg)">AGUARDANDO LANÇAMENTO</span>`;
+  const dataTxt = info.consolidadoEm ? fmtDateBR(info.consolidadoEm.slice(0,10)) : '';
+  return `<span class="badge" style="color:var(--green);background:var(--greenbg)">CONSOLIDADO${dataTxt ? ' EM ' + dataTxt : ''}${info.consolidadoPor ? ' POR ' + escapeHtml(info.consolidadoPor).toUpperCase() : ''}</span>`;
+}
+// Botão de enviar/adicionar + link de cancelar por lançamento pendente
+// próprio — só o dono de fato vê isso (mesma regra que o SGSET antigo usava).
+function lancAcoesHtml(visitaId, ativos){
+  const pendentesProprios = ativos.filter(l => l.status === 'pendente' && l.criado_por === session.user.id);
+  const cancelarLinks = pendentesProprios
+    .map(l => `<button type="button" class="link-btn link-btn-danger" onclick="cancelarLancamento('${l.id}')">Cancelar ${escapeHtml(l.consultor_nome)}</button>`)
+    .join('');
+  return `<div class="archive-actions">
+    <button type="button" class="link-btn" onclick="abrirPainelLancamento('${visitaId}')">${ativos.length ? 'Adicionar consultor' : 'Enviar para lançamento'}</button>
+    ${cancelarLinks}
+  </div>`;
+}
 
 function renderArchive(){
   const list = document.getElementById('archive-list');
@@ -1249,120 +1270,125 @@ function renderArchive(){
     const acc = accByN[v.n];
     const pct = state.totalPrevisto > 0 ? acc / state.totalPrevisto : 0;
     const paras = v.resumo.map(p => `<p>${escapeHtml(p)}</p>`).join('');
-    const pendente = visitaSgsetPendente(v);
-    const podeSelecionar = selecaoSgsetAtiva && isRealOwner && pendente;
+    const lancAtivos = lancamentosAtivosDaVisita(v.id);
+    const lancInfo = statusLancamentoVisita(v.id);
     return `<div class="archive-card${idx===0 ? ' archive-latest' : ''}">
         <div class="archive-side">
-          ${podeSelecionar ? `<label class="archive-select-check">
-            <input type="checkbox" ${selecionadosSgset.has(v.id) ? 'checked' : ''} onchange="toggleVisitaSgsetSelecionada('${v.id}', this.checked)">
-            Selecionar
-          </label>` : ''}
           <div class="archive-num">VISITA ${String(v.n).padStart(2,'0')}</div>
           <div class="archive-date">${fmtDateBR(v.dataISO)}</div>
           <div class="archive-hours">${v.horasNoDia}h no dia · ${acc}h acumuladas (${fmtPct(pct)}%)<br>${escapeHtml(etapaAllocationJoined(v))}</div>
           ${tagRowHtml(etapaIdsOf(v))}
-          <div class="sgset-status ${pendente ? 'sgset-pendente' : 'sgset-ok'}">${pendente ? 'SGSET pendente' : '✓ SGSET OK'}</div>
           ${isOwner ? `<div class="archive-actions">
             <button type="button" class="link-btn" onclick="openFormForEdit('${v.id}')">Editar</button>
             <button type="button" class="link-btn link-btn-danger" onclick="deleteVisit('${v.id}')">Excluir</button>
-            ${(isRealOwner && !pendente) ? `<button type="button" class="link-btn link-btn-sgset-ok" onclick="reabrirSgset('${v.id}')" title="Marcar novamente como pendente">✓ SGSET OK</button>` : ''}
           </div>` : ''}
+          ${lancInfo.tipo !== 'nenhum' ? `<div class="lanc-badge-row">${lancamentoBadgeHtml(lancInfo)}</div>` : ''}
+          ${isRealOwner ? lancAcoesHtml(v.id, lancAtivos) : ''}
         </div>
         <div class="archive-text">${paras}</div>
       </div>`;
   }).join('');
-  atualizarArchiveBulkBar();
 }
 
-function toggleSelecaoSgset(){
-  if(!isRealOwner) return;
-  selecaoSgsetAtiva = !selecaoSgsetAtiva;
-  if(!selecaoSgsetAtiva) selecionadosSgset.clear();
-  document.getElementById('btn-selecionar-sgset').textContent = selecaoSgsetAtiva ? '✕ Cancelar seleção' : '☑ Selecionar para SGSET';
-  renderArchive();
-}
-
-function toggleVisitaSgsetSelecionada(visitaId, marcado){
-  if(marcado) selecionadosSgset.add(visitaId); else selecionadosSgset.delete(visitaId);
-  atualizarArchiveBulkBar();
-}
-
-function atualizarArchiveBulkBar(){
-  const bar = document.getElementById('archive-bulk-bar');
-  bar.classList.toggle('hidden', !selecaoSgsetAtiva);
-  const selecionadas = state.visitas.filter(v => selecionadosSgset.has(v.id));
-  const totalHoras = selecionadas.reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-  document.getElementById('archive-bulk-count').textContent = `${selecionadas.length} visita(s) selecionada(s) · ${totalHoras}h`;
-  document.getElementById('btn-archive-gerar-sgset').disabled = !selecionadas.length;
-}
-
-function cancelarSelecaoSgset(){
-  selecaoSgsetAtiva = false;
-  selecionadosSgset.clear();
-  document.getElementById('btn-selecionar-sgset').textContent = '☑ Selecionar para SGSET';
-}
-
-// Monta UM bloco de assessoria contendo todas as visitas selecionadas (uma
-// ou várias) e abre o painel de resultado compartilhado com painel.html.
-async function gerarSgsetParaVisitas(visitaIds){
-  if(!isRealOwner || !visitaIds.length) return;
-  const selecionadas = state.visitas.filter(v => visitaIds.includes(v.id));
-  if(!selecionadas.length) return;
-  const jaEncaminhadas = state.visitas
-    .filter(v => !visitaIds.includes(v.id) && !visitaSgsetPendente(v))
-    .reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-  const { assunto, corpo } = buildSgsetTexto({
-    consultorNome: meuNome,
-    dataGeracao: todayISO(),
-    blocos: [{
-      clienteNome: assessoriaRow.cliente_nome,
-      projetoNome: assessoriaRow.nome,
-      proposta: assessoriaRow.proposta,
-      totalPrevisto: state.totalPrevisto,
-      horasJaEncaminhadas: jaEncaminhadas,
-      visitas: selecionadas.map(v => ({ dataISO: v.dataISO, resumo: v.resumo, participantes: participantesDaVisitaParaTexto(v, assessoriaRow.owner_id, nomeDoConsultor) }))
-    }]
-  });
-  const totalHoras = selecionadas.reduce((s,v) => s + Number(v.horasNoDia||0), 0);
-  await showSgsetResultado({
-    assunto, corpo,
-    totalVisitas: selecionadas.length,
-    totalHoras,
-    onConfirmarEnvio: async () => {
-      const marcadoEm = new Date().toISOString();
-      selecionadas.forEach(v => {
-        v.sgset = { status:'enviado', enviadoEm: marcadoEm, enviadoPor: { id: session.user.id, nome: meuNome } };
-      });
-      cancelarSelecaoSgset();
-      renderArchive();
-      saveState();
-    }
-  });
-}
-
-async function reabrirSgset(visitaId){
+// Painel de "Enviar para lançamento" — reaproveita o campo type:'participantes'
+// do showActionPanel(), já usado no planejamento de visitas com colaboradores.
+// consultoresParaPlanejamento já vem carregado do boot() (list_consultores()).
+async function abrirPainelLancamento(visitaId){
   if(!isRealOwner) return;
   const v = state.visitas.find(x => x.id === visitaId);
   if(!v) return;
-  const confirmado = await showActionPanel({
-    title: 'Marcar novamente como pendente?',
-    subtitle: `Visita de ${fmtDateBR(v.dataISO)} — isso não desfaz nenhum lançamento já feito no SGSET, só reabre o controle interno para reenvio.`,
+
+  const ativos = lancamentosAtivosDaVisita(visitaId);
+  const idsAtivos = new Set(ativos.map(l => l.consultor_id));
+
+  const options = [];
+  if(!idsAtivos.has(session.user.id)){
+    options.push({ id: session.user.id, nome: meuNome, checked: true, horas: v.horasNoDia });
+  }
+  consultoresParaPlanejamento
+    .filter(c => !idsAtivos.has(c.id))
+    .forEach(c => options.push({ id: c.id, nome: c.nome, checked: false, horas: '' }));
+
+  if(!options.length){
+    await showActionPanel({
+      title: 'Enviar para lançamento',
+      subtitle: 'Todos os consultores disponíveis já têm lançamento ativo para esta visita.',
+      actions: [{ label:'Entendi', style:'ghost' }]
+    });
+    return;
+  }
+
+  const jaEnviadosTexto = ativos.length
+    ? 'Já enviados: ' + ativos.map(l => `${l.consultor_nome} (${l.horas}h, ${l.status === 'pendente' ? 'pendente' : 'consolidado'})`).join('; ')
+    : '';
+
+  const result = await showActionPanel({
+    title: 'Enviar para lançamento',
+    subtitle: `${fmtDateBR(v.dataISO)} · ${v.horasNoDia}h registradas nesta visita${jaEnviadosTexto ? '\n' + jaEnviadosTexto : ''}`,
+    fields: [
+      { id:'consultores', type:'participantes', label:'Consultores e horas a lançar', options }
+    ],
     actions: [
-      { label:'Marcar como pendente', style:'danger', value:'sim' },
-      { label:'Cancelar', style:'ghost', value:'nao' }
+      { label:'Enviar', style:'primary', value:'ok' },
+      { label:'Cancelar', style:'ghost', value:'cancel' }
     ]
   });
-  if(!confirmado || confirmado.action !== 'sim') return;
-  delete v.sgset;
-  renderArchive();
-  saveState();
-}
-window.toggleVisitaSgsetSelecionada = toggleVisitaSgsetSelecionada;
-window.reabrirSgset = reabrirSgset;
+  if(!result || result.action !== 'ok') return;
+  const linhas = result.values.consultores || [];
+  if(!linhas.length){ alert('Selecione ao menos um consultor.'); return; }
+  if(linhas.some(l => !(Number(l.horas) > 0))){ alert('Informe um número de horas válido para cada consultor selecionado.'); return; }
 
-document.getElementById('btn-selecionar-sgset').addEventListener('click', toggleSelecaoSgset);
-document.getElementById('btn-archive-gerar-sgset').addEventListener('click', () => gerarSgsetParaVisitas(Array.from(selecionadosSgset)));
-document.getElementById('btn-archive-cancelar-sgset').addEventListener('click', () => { cancelarSelecaoSgset(); renderArchive(); });
+  const payload = linhas.map(l => ({
+    assessoria_id: assessoriaId,
+    visita_id: v.id,
+    data_visita: v.dataISO,
+    empresa_nome: assessoriaRow.cliente_nome || assessoriaRow.nome,
+    municipio: assessoriaRow.municipio || null,
+    programa: assessoriaRow.programa || 'BP',
+    criado_por: session.user.id,
+    consultor_id: l.consultorId,
+    consultor_nome: l.nome,
+    horas: Number(l.horas)
+  }));
+
+  const { data: inserted, error } = await sb.from('lancamentos').insert(payload).select();
+  if(error){
+    alert(error.code === '23505'
+      ? 'Um ou mais consultores selecionados já têm um lançamento ativo para esta visita. A lista foi atualizada — confira antes de tentar de novo.'
+      : 'Não foi possível enviar para lançamento: ' + error.message);
+    const { data: fresh } = await sb.from('lancamentos').select('*').eq('assessoria_id', assessoriaId);
+    lancamentos = fresh || lancamentos;
+    renderArchive();
+    return;
+  }
+  lancamentos = lancamentos.concat(inserted || []);
+  renderArchive();
+}
+
+// Cancela um lançamento próprio ainda pendente (a RPC cuida de checar dono e
+// status; nunca apaga a linha, só marca 'cancelado').
+async function cancelarLancamento(id){
+  const result = await showActionPanel({
+    title: 'Cancelar lançamento?',
+    subtitle: 'O lançamento fica marcado como cancelado (não é apagado) e libera um novo envio desse consultor pra esta visita.',
+    actions: [
+      { label:'Cancelar lançamento', style:'danger', value:'sim' },
+      { label:'Voltar', style:'ghost', value:'nao' }
+    ]
+  });
+  if(!result || result.action !== 'sim') return;
+
+  const { data, error } = await sb.rpc('cancelar_lancamento_pendente', { p_id: id });
+  if(error){
+    alert('Não foi possível cancelar: ' + error.message);
+    return;
+  }
+  const idx = lancamentos.findIndex(l => l.id === id);
+  if(idx >= 0) lancamentos[idx] = data;
+  renderArchive();
+}
+window.abrirPainelLancamento = abrirPainelLancamento;
+window.cancelarLancamento = cancelarLancamento;
 
 let planCalendarBase = null;
 let outrasAssessorias = [];
@@ -2347,8 +2373,6 @@ function applyRoleUI(){
   document.getElementById('porte-select').classList.toggle('hidden', !isOwner || !programaEhBP());
   document.getElementById('prazos-bp-card').classList.toggle('hidden', !isOwner || !programaEhBP());
   document.getElementById('plan-generator').classList.toggle('hidden', !isOwner);
-  // SGSET é ação exclusiva do dono de fato — nunca do gestor visualizando.
-  document.getElementById('btn-selecionar-sgset').classList.toggle('hidden', !isRealOwner);
   applyPorteGate();
 }
 
@@ -2924,6 +2948,11 @@ async function boot(){
     colaboradoresDaAssessoria = (colabRows || []).map(r => r.colaborador_id);
     const { data: consultoresList } = await sb.rpc('list_consultores');
     consultoresParaPlanejamento = consultoresList || [];
+    // Lançamentos SGSET desta assessoria: dono real vê só o que ele mesmo
+    // criou (RLS), gestor vê tudo — em ambos os casos dá pra montar o
+    // status visual de cada visita.
+    const { data: lancs } = await sb.from('lancamentos').select('*').eq('assessoria_id', assessoriaId);
+    lancamentos = lancs || [];
   }
 
   ensureProjectSchema();

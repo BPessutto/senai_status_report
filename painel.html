@@ -1021,6 +1021,14 @@
     if (!session) return;
 
     const { data: perfil } = await sb.from('profiles').select('role,nome,email').eq('id', session.user.id).maybeSingle();
+
+    // Apoio não usa "Minhas Assessorias" — manda direto pra fila dele antes
+    // de renderizar qualquer coisa daqui.
+    if (perfil && perfil.role === 'apoio') {
+      window.location.href = 'apoio.html';
+      return;
+    }
+
     isGestorUser = Boolean(perfil && perfil.role === 'gestor');
     meuNome = (perfil && (perfil.nome || perfil.email)) || session.user.email;
 

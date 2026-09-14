@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel do Apoio · Painel de Assessorias</title>
+<link rel="stylesheet" href="js/shared.css">
+<style>
+  .header-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .header-email{font-size:12px;color:#dbeafe}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:14px}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px}
+  .kpi-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px}
+  .kpi-value{font-size:24px;font-weight:800;color:var(--navy)}
+
+  .tabs{display:flex;gap:0;margin-top:18px;border-bottom:1px solid var(--border)}
+  .tab-btn{border:0;background:none;padding:10px 4px;margin-right:20px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+  .tab-btn:hover{color:var(--navy)}
+  .tab-btn.active{color:var(--navy);border-bottom-color:var(--blue)}
+
+  .tab-panel{margin-top:6px}
+
+  .consultor-group{margin-top:18px}
+  .consultor-group:first-child{margin-top:14px}
+  .consultor-group-title{font-size:13px;font-weight:800;color:var(--navy);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .consultor-group-title .muted{font-weight:600}
+
+  .lanc-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+  .lanc-item-info{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+  .lanc-item-main{font-size:13px;font-weight:700;color:var(--navy)}
+  .lanc-item-meta{font-size:11.5px;color:var(--muted)}
+  .lanc-item-obs{font-size:11.5px;color:var(--text);font-style:italic;margin-top:2px}
+  .lanc-item-side{display:flex;align-items:center;gap:12px;flex-shrink:0}
+
+  .success-box{background:var(--greenbg);color:var(--green);border:1px solid #bfe3c2;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+
+  @media(max-width:640px){
+    .lanc-item{flex-direction:column;align-items:flex-start}
+    .lanc-item-side{width:100%;justify-content:space-between}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <div class="logo-group">
+        <div class="logo-box logo-senai"><img src="assets/logo-senai.png" alt="SENAI"></div>
+      </div>
+      <div class="title-block">
+        <div class="eyebrow">ACOMPANHAMENTO DE CONSULTORIAS</div>
+        <h1>Painel do Apoio</h1>
+        <div class="sub">Fila de lançamentos de visitas pendentes de consolidação no SGSET</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="header-email" id="user-email"></span>
+      <button class="btn btn-ghost" id="btn-logout">Sair</button>
+    </div>
+  </header>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Pendentes</div>
+      <div class="kpi-value" id="kpi-pendentes">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Consolidados hoje</div>
+      <div class="kpi-value" id="kpi-consolidados-hoje">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Consultores com pendências</div>
+      <div class="kpi-value" id="kpi-consultores">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Horas pendentes</div>
+      <div class="kpi-value" id="kpi-horas">—</div>
+    </div>
+  </div>
+
+  <div id="feedback"></div>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn active" data-tab="pendentes">Pendentes</button>
+    <button type="button" class="tab-btn" data-tab="consolidados">Consolidados</button>
+    <button type="button" class="tab-btn" data-tab="cancelados">Cancelados</button>
+  </div>
+
+  <div class="tab-panel" id="tab-pendentes"></div>
+  <div class="tab-panel hidden" id="tab-consolidados"></div>
+  <div class="tab-panel hidden" id="tab-cancelados"></div>
+</div>
+
+<script src="js/vendor/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script type="module">
+import { sb } from './js/supabase-client.js';
+import { requireSession, logout } from './js/session.js';
+import { fmtDateBR, todayISO } from './js/calendar-utils.js';
+import { showActionPanel } from './js/action-panel.js';
+
+document.getElementById('btn-logout').addEventListener('click', logout);
+
+function escapeHtml(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function round1(x){ return Math.round(Number(x||0) * 10) / 10; }
+function soData(ts){ return ts ? ts.slice(0,10) : null; }
+
+const STATUS_META = {
+  pendente:    { color:'var(--amber)', bg:'var(--amberbg)', label:'PENDENTE' },
+  consolidado: { color:'var(--green)', bg:'var(--greenbg)', label:'CONSOLIDADO' },
+  cancelado:   { color:'var(--muted)', bg:'#eef1f5',         label:'CANCELADO' }
+};
+function statusBadgeHtml(status){
+  const s = STATUS_META[status] || STATUS_META.pendente;
+  return `<span class="badge" style="color:${s.color};background:${s.bg}">${s.label}</span>`;
+}
+
+function emptyHtml(msg){
+  return `<div class="empty-state">${escapeHtml(msg)}</div>`;
+}
+
+function feedback(msg, tipo){
+  const el = document.getElementById('feedback');
+  el.innerHTML = `<div class="${tipo === 'erro' ? 'error-box' : 'success-box'}">${escapeHtml(msg)}</div>`;
+  setTimeout(() => { if(el.firstElementChild) el.innerHTML = ''; }, 4000);
+}
+
+// --- estado local (só o que as RPCs devolvem — nenhuma consulta direta a
+// public.lancamentos, public.assessorias ou public.profiles nesta tela) ---
+let pendentes = [];
+let consolidados = [];
+let cancelados = [];
+
+function lancItemHtml(l, opts = {}){
+  const showConsultor = !!opts.showConsultor;
+  const metaParts = [
+    l.municipio ? escapeHtml(l.municipio) : null,
+    l.programa ? escapeHtml(l.programa) : null
+  ].filter(Boolean);
+  if(l.status === 'consolidado'){
+    metaParts.push(`Consolidado em ${fmtDateBR(soData(l.consolidado_em))}${l.consolidado_por_nome ? ' por ' + escapeHtml(l.consolidado_por_nome) : ''}`);
+  } else if(l.status === 'cancelado'){
+    metaParts.push(`Cancelado em ${fmtDateBR(soData(l.cancelado_em))}`);
+  }
+  const mainLine = `${showConsultor ? escapeHtml(l.consultor_nome) + ' · ' : ''}${escapeHtml(l.empresa_nome)} · ${fmtDateBR(l.data_visita)} · ${round1(l.horas)}h`;
+  return `
+    <div class="lanc-item">
+      <div class="lanc-item-info">
+        <div class="lanc-item-main">${mainLine}</div>
+        ${metaParts.length ? `<div class="lanc-item-meta">${metaParts.join(' · ')}</div>` : ''}
+        ${l.observacao ? `<div class="lanc-item-obs">"${escapeHtml(l.observacao)}"</div>` : ''}
+      </div>
+      <div class="lanc-item-side">
+        ${statusBadgeHtml(l.status)}
+        ${l.status === 'pendente' ? `<button type="button" class="btn btn-primary" data-consolidar="${l.id}">Consolidar</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function groupByConsultor(rows){
+  const map = new Map();
+  rows.forEach(l => {
+    if(!map.has(l.consultor_id)) map.set(l.consultor_id, { nome: l.consultor_nome, itens: [] });
+    map.get(l.consultor_id).itens.push(l);
+  });
+  return [...map.values()]
+    .sort((a, b) => a.nome.localeCompare(b.nome))
+    .map(g => ({ ...g, itens: [...g.itens].sort((x, y) => x.data_visita.localeCompare(y.data_visita)) }));
+}
+
+function renderKPIs(){
+  const hoje = todayISO();
+  document.getElementById('kpi-pendentes').textContent = pendentes.length;
+  document.getElementById('kpi-consolidados-hoje').textContent =
+    consolidados.filter(l => soData(l.consolidado_em) === hoje).length;
+  document.getElementById('kpi-consultores').textContent =
+    new Set(pendentes.map(l => l.consultor_id)).size;
+  document.getElementById('kpi-horas').textContent =
+    round1(pendentes.reduce((s, l) => s + Number(l.horas || 0), 0)) + 'h';
+}
+
+function renderPendentes(){
+  const wrap = document.getElementById('tab-pendentes');
+  const grupos = groupByConsultor(pendentes);
+  if(!grupos.length){
+    wrap.innerHTML = emptyHtml('Nenhum lançamento pendente no momento.');
+    return;
+  }
+  wrap.innerHTML = grupos.map(g => `
+    <div class="consultor-group">
+      <div class="consultor-group-title">${escapeHtml(g.nome)} <span class="muted">(${g.itens.length} pendente${g.itens.length > 1 ? 's' : ''})</span></div>
+      ${g.itens.map(l => lancItemHtml(l)).join('')}
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-consolidar]').forEach(btn => {
+    btn.addEventListener('click', () => abrirConsolidar(btn.dataset.consolidar));
+  });
+}
+
+function renderHistorico(status){
+  const wrap = document.getElementById(status === 'consolidado' ? 'tab-consolidados' : 'tab-cancelados');
+  const rows = status === 'consolidado' ? consolidados : cancelados;
+  if(!rows.length){
+    wrap.innerHTML = emptyHtml(status === 'consolidado' ? 'Nenhum lançamento consolidado ainda.' : 'Nenhum lançamento cancelado ainda.');
+    return;
+  }
+  const campo = status === 'consolidado' ? 'consolidado_em' : 'cancelado_em';
+  const ordenados = [...rows].sort((a, b) => String(b[campo] || '').localeCompare(String(a[campo] || '')));
+  wrap.innerHTML = ordenados.map(l => lancItemHtml(l, { showConsultor: true })).join('');
+}
+
+function renderTudo(){
+  renderKPIs();
+  renderPendentes();
+  renderHistorico('consolidado');
+  renderHistorico('cancelado');
+}
+
+async function abrirConsolidar(id){
+  const l = pendentes.find(x => x.id === id);
+  if(!l) return;
+  const result = await showActionPanel({
+    title: 'Consolidar lançamento',
+    subtitle: `${l.consultor_nome}\n${l.empresa_nome} · ${fmtDateBR(l.data_visita)} · ${round1(l.horas)}h · ${l.programa || ''}`,
+    fields: [
+      { id: 'observacao', label: 'Observação (opcional)', type: 'text', placeholder: 'Ex.: lançado no SGSET' }
+    ],
+    actions: [
+      { label: 'Confirmar consolidação', style: 'primary', value: 'ok' },
+      { label: 'Cancelar', style: 'ghost', value: 'cancel' }
+    ]
+  });
+  if(!result || result.action !== 'ok') return;
+
+  const observacao = String(result.values.observacao || '').trim();
+  const { data, error } = await sb.rpc('apoio_consolidar_lancamento', {
+    p_id: id,
+    p_observacao: observacao || null
+  });
+  if(error){
+    feedback('Não foi possível consolidar: ' + error.message, 'erro');
+    // pode ter sido consolidado/cancelado por outra pessoa nesse meio tempo —
+    // recarrega a fila pra refletir o estado real.
+    await carregarTudo();
+    return;
+  }
+
+  pendentes = pendentes.filter(x => x.id !== id);
+  consolidados = [data, ...consolidados];
+  renderTudo();
+  feedback(`Lançamento de ${l.consultor_nome} (${l.empresa_nome}) consolidado.`, 'sucesso');
+}
+
+async function carregarTudo(){
+  const [pend, cons, canc] = await Promise.all([
+    sb.rpc('apoio_listar_lancamentos', { p_status: 'pendente' }),
+    sb.rpc('apoio_listar_lancamentos', { p_status: 'consolidado' }),
+    sb.rpc('apoio_listar_lancamentos', { p_status: 'cancelado' })
+  ]);
+  const erro = pend.error || cons.error || canc.error;
+  if(erro){
+    document.getElementById('tab-pendentes').innerHTML = `<div class="error-box">Não foi possível carregar a fila: ${escapeHtml(erro.message)}</div>`;
+    return;
+  }
+  pendentes = pend.data || [];
+  consolidados = cons.data || [];
+  cancelados = canc.data || [];
+  renderTudo();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
+  });
+});
+
+(async () => {
+  const session = await requireSession();
+  if(!session) return;
+
+  // Gate por RPC (não por leitura direta de public.profiles): is_apoio()
+  // já roda como SECURITY DEFINER no banco e responde só true/false.
+  const { data: souApoio, error: erroApoio } = await sb.rpc('is_apoio');
+  if(erroApoio || !souApoio){
+    window.location.href = 'painel.html';
+    return;
+  }
+
+  document.getElementById('user-email').textContent = session.user.email;
+  await carregarTudo();
+})();
+</script>
+</body>
+</html>

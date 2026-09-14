@@ -91,14 +91,23 @@
   // automático — mesmo que o client já tenha processado o token da URL e
   // criado uma sessão (detectSessionInUrl), essa sessão é de recovery, não
   // de login normal.
+  //
+  // Manda cada papel pro destino certo. Consultor e gestor continuam indo
+  // pra painel.html exatamente como antes (é lá que o gestor é redirecionado
+  // pra gestor.html); só o apoio ganha um destino direto novo.
+  async function redirectAfterAuth(session){
+    const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+    window.location.href = (perfil && perfil.role === 'apoio') ? 'apoio.html' : 'painel.html';
+  }
+
   (async () => {
     if (urlIndicaRecovery()) {
       window.location.href = 'redefinir-senha.html' + window.location.search + window.location.hash;
       return;
     }
-    // Se já existe sessão válida, pula direto pro painel.
+    // Se já existe sessão válida, pula direto pro destino certo.
     const { data: { session } } = await sb.auth.getSession();
-    if (session) window.location.href = 'painel.html';
+    if (session) await redirectAfterAuth(session);
   })();
 
   // Mecanismo oficial do Supabase Auth (resetPasswordForEmail) — sem
@@ -145,14 +154,14 @@
 
     try {
       if (mode === 'entrar') {
-        const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
-        window.location.href = 'painel.html';
+        await redirectAfterAuth(data.session);
       } else {
         const { data, error } = await sb.auth.signUp({ email, password: senha });
         if (error) throw error;
         if (data.session) {
-          window.location.href = 'painel.html';
+          await redirectAfterAuth(data.session);
         } else {
           showOk('Conta criada! Verifique seu e-mail para confirmar o cadastro e depois faça login.');
         }

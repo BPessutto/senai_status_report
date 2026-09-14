@@ -540,6 +540,232 @@ create policy "assessoria_colaboradores: participant read"
   for select
   using (public.is_assessoria_owner(assessoria_id) or public.has_collaborator_access(assessoria_id));
 
+-- ============================================================
+-- Perfil "apoio" + fila de lançamentos (SGSET)
+--
+-- Substitui o fluxo manual de e-mail pro apoio: o consultor marca uma
+-- visita como "enviar para lançamento", isso vira uma ou mais linhas em
+-- public.lancamentos (uma por consultor, já que uma mesma visita pode
+-- ter horas de mais de um consultor), e um usuário com role 'apoio'
+-- consolida essas linhas numa tela própria depois de lançar no SGSET
+-- externo. O apoio nunca recebe acesso a assessorias/profiles/
+-- compensacoes: toda leitura e escrita dele passa por função
+-- SECURITY DEFINER, que expõe só os campos necessários.
+--
+-- Reaproveita public.list_consultores() (já definida acima, seção MOVER/
+-- colaboradores) pro seletor de "adicionar consultor" no painel de envio —
+-- não recria uma função equivalente aqui.
+-- ============================================================
+
+-- profiles.role passa a aceitar também 'apoio'. Descobre o nome real da
+-- constraint de check em vez de assumir um nome fixo (pode já ter sido
+-- criada com outro nome em algum ambiente) e recria com nome canônico.
+do $$
+declare
+  v_constraint_name text;
+begin
+  select con.conname into v_constraint_name
+  from pg_constraint con
+  join pg_class rel on rel.oid = con.conrelid
+  join pg_namespace nsp on nsp.oid = rel.relnamespace
+  where nsp.nspname = 'public'
+    and rel.relname = 'profiles'
+    and con.contype = 'c'
+    and pg_get_constraintdef(con.oid) ilike '%role%';
+
+  if v_constraint_name is not null then
+    execute format('alter table public.profiles drop constraint %I', v_constraint_name);
+  end if;
+end $$;
+
+alter table public.profiles
+  add constraint profiles_role_check check (role in ('consultor','gestor','apoio'));
+
+-- Uma linha por (assessoria, visita, consultor) — visita_id é o v.id
+-- gerado no JSONB da assessoria (dashboard.html), não uma FK de verdade
+-- porque visitas não são linhas de tabela. empresa_nome/municipio/
+-- consultor_nome ficam denormalizados na criação: assim a tela do apoio
+-- não precisa fazer join nenhum em assessorias/profiles (nem por baixo
+-- dos panos, dentro da função SECURITY DEFINER), o que mantém o acesso
+-- do apoio restrito só a esta tabela.
+--
+-- Sem UNIQUE de tabela em (assessoria_id, visita_id, consultor_id): uma
+-- linha cancelada não pode continuar bloqueando um reenvio corrigido do
+-- mesmo consultor pra mesma visita. A unicidade real vem do índice único
+-- parcial abaixo, que ignora linhas 'cancelado'.
+create table if not exists public.lancamentos (
+  id uuid primary key default gen_random_uuid(),
+  assessoria_id uuid not null references public.assessorias(id) on delete cascade,
+  visita_id text not null,
+  data_visita date not null,
+  empresa_nome text not null,
+  municipio text,
+  programa text not null default 'BP' check (programa in ('BP','MOVER')),
+  consultor_id uuid not null references auth.users(id),
+  consultor_nome text not null,
+  horas numeric not null check (horas > 0),
+  status text not null default 'pendente' check (status in ('pendente','consolidado','cancelado')),
+  observacao text,
+  criado_por uuid not null references auth.users(id),
+  created_at timestamptz not null default now(),
+  consolidado_por uuid references auth.users(id),
+  consolidado_por_nome text,
+  consolidado_em timestamptz,
+  cancelado_por uuid references auth.users(id),
+  cancelado_em timestamptz
+);
+
+-- Bloqueia duplicidade entre linhas ativas (pendente ou consolidado) do
+-- mesmo consultor na mesma visita, mas libera reenvio depois que a linha
+-- anterior foi cancelada (status <> 'cancelado' fica de fora do índice).
+create unique index if not exists lancamentos_unico_ativo_idx
+  on public.lancamentos (assessoria_id, visita_id, consultor_id)
+  where status <> 'cancelado';
+
+create index if not exists lancamentos_status_idx on public.lancamentos (status);
+create index if not exists lancamentos_consultor_idx on public.lancamentos (consultor_id);
+create index if not exists lancamentos_assessoria_idx on public.lancamentos (assessoria_id);
+create index if not exists lancamentos_criado_por_idx on public.lancamentos (criado_por);
+
+alter table public.lancamentos enable row level security;
+
+-- Consultor: só INSERT (do que ele mesmo envia, só da própria assessoria)
+-- e SELECT (do que ele mesmo criou). Sem UPDATE/DELETE direto — qualquer
+-- mudança de status é feita pelas funções abaixo.
+drop policy if exists "lancamentos: consultor insere o que envia" on public.lancamentos;
+create policy "lancamentos: consultor insere o que envia"
+  on public.lancamentos
+  for insert
+  with check (criado_por = auth.uid() and public.is_assessoria_owner(assessoria_id));
+
+drop policy if exists "lancamentos: consultor ve o que enviou" on public.lancamentos;
+create policy "lancamentos: consultor ve o que enviou"
+  on public.lancamentos
+  for select
+  using (criado_por = auth.uid());
+
+-- Gestor: acesso total, mesmo padrão já usado nas outras tabelas (escape
+-- hatch manual se precisar corrigir algo fora do fluxo normal).
+drop policy if exists "lancamentos: gestor full access" on public.lancamentos;
+create policy "lancamentos: gestor full access"
+  on public.lancamentos
+  for all
+  using (public.is_gestor())
+  with check (public.is_gestor());
+
+-- Nenhuma policy é criada aqui para 'apoio': ele não tem nenhum acesso
+-- direto a esta tabela. Toda leitura e escrita do apoio passa pelas
+-- funções SECURITY DEFINER abaixo, que verificam is_apoio() no corpo.
+
+create or replace function public.is_apoio()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles where id = auth.uid() and role = 'apoio'
+  );
+$$;
+revoke all on function public.is_apoio() from public;
+grant execute on function public.is_apoio() to authenticated;
+
+-- Leitura da fila pelo apoio. p_status = 'pendente' (default) pra fila
+-- principal; null ou 'consolidado'/'cancelado' pra histórico. Cancelados
+-- não aparecem na fila principal porque ela filtra por status='pendente'.
+create or replace function public.apoio_listar_lancamentos(p_status text default 'pendente')
+returns setof public.lancamentos
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+begin
+  if not public.is_apoio() then
+    raise exception 'Acesso restrito ao perfil apoio';
+  end if;
+
+  return query
+    select * from public.lancamentos
+    where (p_status is null or status = p_status)
+    order by data_visita desc;
+end;
+$$;
+revoke all on function public.apoio_listar_lancamentos(text) from public;
+grant execute on function public.apoio_listar_lancamentos(text) to authenticated;
+
+-- Consolidação: só apoio, só linha ainda 'pendente'. Se nenhuma linha for
+-- afetada (id inexistente, já consolidada ou já cancelada), estoura
+-- exceção em vez de devolver sucesso silencioso.
+create or replace function public.apoio_consolidar_lancamento(p_id uuid, p_observacao text default null)
+returns public.lancamentos
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_nome text;
+  v_row public.lancamentos;
+begin
+  if not public.is_apoio() then
+    raise exception 'Acesso restrito ao perfil apoio';
+  end if;
+
+  select nome into v_nome from public.profiles where id = auth.uid();
+
+  update public.lancamentos
+    set status = 'consolidado',
+        consolidado_por = auth.uid(),
+        consolidado_por_nome = coalesce(v_nome, 'Apoio'),
+        consolidado_em = now(),
+        observacao = coalesce(p_observacao, observacao)
+    where id = p_id and status = 'pendente'
+    returning * into v_row;
+
+  if v_row.id is null then
+    raise exception 'Lançamento não encontrado ou já consolidado' using errcode = 'P0002';
+  end if;
+
+  return v_row;
+end;
+$$;
+revoke all on function public.apoio_consolidar_lancamento(uuid, text) from public;
+grant execute on function public.apoio_consolidar_lancamento(uuid, text) to authenticated;
+
+-- Cancelamento pelo próprio consultor que enviou, só enquanto 'pendente'.
+-- Não apaga a linha (auditoria): marca status = 'cancelado' e registra
+-- quem/quando. Uma linha já 'consolidado' nunca pode ser cancelada (fora
+-- do where, então não é afetada — e o erro abaixo cobre esse caso). Sem
+-- linha afetada, estoura exceção clara em vez de sucesso silencioso. O
+-- índice único parcial (lancamentos_unico_ativo_idx) libera reenvio do
+-- mesmo consultor/visita assim que esta linha vira 'cancelado'.
+create or replace function public.cancelar_lancamento_pendente(p_id uuid)
+returns public.lancamentos
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.lancamentos;
+begin
+  update public.lancamentos
+    set status = 'cancelado',
+        cancelado_por = auth.uid(),
+        cancelado_em = now()
+    where id = p_id and criado_por = auth.uid() and status = 'pendente'
+    returning * into v_row;
+
+  if v_row.id is null then
+    raise exception 'Lançamento não encontrado, não é seu ou já foi consolidado/cancelado' using errcode = 'P0002';
+  end if;
+
+  return v_row;
+end;
+$$;
+revoke all on function public.cancelar_lancamento_pendente(uuid) from public;
+grant execute on function public.cancelar_lancamento_pendente(uuid) to authenticated;
+
 commit;
 
 -- Fim do schema.
@@ -548,3 +774,8 @@ commit;
 -- Para promover alguém a gestor (acesso total a todos os consultores),
 -- a pessoa precisa já ter uma conta criada em login.html. Depois rode:
 -- update public.profiles set role = 'gestor' where email = 'email-do-gestor@exemplo.com';
+--
+-- Para promover alguém a apoio (fila de lançamentos SGSET, sem acesso ao
+-- resto do sistema), a pessoa precisa já ter uma conta criada em
+-- login.html. Depois rode:
+-- update public.profiles set role = 'apoio' where email = 'email-do-apoio@exemplo.com';

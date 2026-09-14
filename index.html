@@ -18,7 +18,15 @@
     window.location.href = 'redefinir-senha.html' + window.location.search + window.location.hash;
   } else {
     const { data: { session } } = await sb.auth.getSession();
-    window.location.href = session ? 'painel.html' : 'login.html';
+    if (!session) {
+      window.location.href = 'login.html';
+    } else {
+      // Consultor e gestor seguem pro fluxo de sempre (painel.html decide o
+      // resto, incluindo mandar o gestor pra gestor.html); só o apoio ganha
+      // destino direto.
+      const { data: perfil } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+      window.location.href = (perfil && perfil.role === 'apoio') ? 'apoio.html' : 'painel.html';
+    }
   }
 </script>
 </body>
