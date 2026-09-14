@@ -26,19 +26,25 @@
   .consultor-group-title{font-size:13px;font-weight:800;color:var(--navy);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
   .consultor-group-title .muted{font-weight:600}
 
-  .lanc-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
-  .lanc-item-info{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
-  .lanc-item-main{font-size:13px;font-weight:700;color:var(--navy)}
-  .lanc-item-meta{font-size:11.5px;color:var(--muted)}
-  .lanc-item-obs{font-size:11.5px;color:var(--text);font-style:italic;margin-top:2px}
-  .lanc-item-side{display:flex;align-items:center;gap:12px;flex-shrink:0}
+  /* Tabela/grid responsiva de lançamentos — 7 colunas no desktop, empilhada
+     com rótulo por campo (via [data-label]::before) em telas estreitas. */
+  .lanc-table{display:flex;flex-direction:column;gap:6px}
+  .lanc-table-head{display:grid;grid-template-columns:1.3fr .7fr .8fr .5fr 2.4fr 1fr .85fr;gap:12px;padding:0 14px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .lanc-row{display:grid;grid-template-columns:1.3fr .7fr .8fr .5fr 2.4fr 1fr .85fr;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:8px}
+  .lanc-cell-empresa{min-width:0}
+  .lanc-cell-consultor{font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+  .lanc-cell-empresa > div:not(.lanc-cell-consultor):not(.lanc-cell-meta){font-weight:700;color:var(--navy);font-size:13px}
+  .lanc-cell-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .lanc-cell-desc{font-size:12.5px;color:var(--text);white-space:pre-line;overflow-wrap:anywhere;min-width:0}
+  .lanc-cell-obs{font-size:11px;color:var(--text);font-style:italic;margin-top:4px}
 
   .success-box{background:var(--greenbg);color:var(--green);border:1px solid #bfe3c2;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px}
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
 
-  @media(max-width:640px){
-    .lanc-item{flex-direction:column;align-items:flex-start}
-    .lanc-item-side{width:100%;justify-content:space-between}
+  @media(max-width:860px){
+    .lanc-table-head{display:none}
+    .lanc-row{grid-template-columns:1fr;gap:8px}
+    .lanc-row > div[data-label]::before{content:attr(data-label);display:block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:3px}
   }
 </style>
 </head>
@@ -136,31 +142,49 @@ let pendentes = [];
 let consolidados = [];
 let cancelados = [];
 
-function lancItemHtml(l, opts = {}){
+// Uma linha da tabela de lançamentos. showConsultor: mostra o nome do
+// consultor dentro da célula Empresa (usado no histórico, que é uma lista
+// plana — na fila de pendentes o nome já vira o título do grupo, então não
+// se repete aqui). showAcao: só a fila de pendentes tem o botão Consolidar.
+function lancRowHtml(l, opts = {}){
   const showConsultor = !!opts.showConsultor;
-  const metaParts = [
-    l.municipio ? escapeHtml(l.municipio) : null,
-    l.programa ? escapeHtml(l.programa) : null
-  ].filter(Boolean);
+  const showAcao = !!opts.showAcao;
+  const metaSecundaria = [l.municipio, l.programa].filter(Boolean).join(' · ');
+  let statusExtra = '';
   if(l.status === 'consolidado'){
-    metaParts.push(`Consolidado em ${fmtDateBR(soData(l.consolidado_em))}${l.consolidado_por_nome ? ' por ' + escapeHtml(l.consolidado_por_nome) : ''}`);
+    statusExtra = `Consolidado em ${fmtDateBR(soData(l.consolidado_em))}${l.consolidado_por_nome ? ' por ' + escapeHtml(l.consolidado_por_nome) : ''}`;
   } else if(l.status === 'cancelado'){
-    metaParts.push(`Cancelado em ${fmtDateBR(soData(l.cancelado_em))}`);
+    statusExtra = `Cancelado em ${fmtDateBR(soData(l.cancelado_em))}`;
   }
-  const mainLine = `${showConsultor ? escapeHtml(l.consultor_nome) + ' · ' : ''}${escapeHtml(l.empresa_nome)} · ${fmtDateBR(l.data_visita)} · ${round1(l.horas)}h`;
   return `
-    <div class="lanc-item">
-      <div class="lanc-item-info">
-        <div class="lanc-item-main">${mainLine}</div>
-        ${metaParts.length ? `<div class="lanc-item-meta">${metaParts.join(' · ')}</div>` : ''}
-        ${l.observacao ? `<div class="lanc-item-obs">"${escapeHtml(l.observacao)}"</div>` : ''}
+    <div class="lanc-row">
+      <div data-label="Empresa" class="lanc-cell-empresa">
+        ${showConsultor ? `<div class="lanc-cell-consultor">${escapeHtml(l.consultor_nome)}</div>` : ''}
+        <div>${escapeHtml(l.empresa_nome)}</div>
+        ${metaSecundaria ? `<div class="lanc-cell-meta">${escapeHtml(metaSecundaria)}</div>` : ''}
       </div>
-      <div class="lanc-item-side">
+      <div data-label="Proposta SGSET">${l.proposta ? escapeHtml(l.proposta) : '—'}</div>
+      <div data-label="Data">${fmtDateBR(l.data_visita)}</div>
+      <div data-label="Horas">${round1(l.horas)}h</div>
+      <div data-label="Descritivo da visita" class="lanc-cell-desc">${l.descricao_visita ? escapeHtml(l.descricao_visita) : '—'}</div>
+      <div data-label="Status">
         ${statusBadgeHtml(l.status)}
-        ${l.status === 'pendente' ? `<button type="button" class="btn btn-primary" data-consolidar="${l.id}">Consolidar</button>` : ''}
+        ${statusExtra ? `<div class="lanc-cell-meta">${statusExtra}</div>` : ''}
+        ${l.observacao ? `<div class="lanc-cell-obs">"${escapeHtml(l.observacao)}"</div>` : ''}
+      </div>
+      <div data-label="Ação">
+        ${showAcao && l.status === 'pendente' ? `<button type="button" class="btn btn-primary" data-consolidar="${l.id}">Consolidar</button>` : ''}
       </div>
     </div>
   `;
+}
+
+function lancTableHtml(rows, opts){
+  const header = `
+    <div class="lanc-table-head">
+      <div>Empresa</div><div>Proposta SGSET</div><div>Data</div><div>Horas</div><div>Descritivo da visita</div><div>Status</div><div>Ação</div>
+    </div>`;
+  return `<div class="lanc-table">${header}${rows.map(l => lancRowHtml(l, opts)).join('')}</div>`;
 }
 
 function groupByConsultor(rows){
@@ -195,7 +219,7 @@ function renderPendentes(){
   wrap.innerHTML = grupos.map(g => `
     <div class="consultor-group">
       <div class="consultor-group-title">${escapeHtml(g.nome)} <span class="muted">(${g.itens.length} pendente${g.itens.length > 1 ? 's' : ''})</span></div>
-      ${g.itens.map(l => lancItemHtml(l)).join('')}
+      ${lancTableHtml(g.itens, { showConsultor: false, showAcao: true })}
     </div>
   `).join('');
   wrap.querySelectorAll('[data-consolidar]').forEach(btn => {
@@ -212,7 +236,7 @@ function renderHistorico(status){
   }
   const campo = status === 'consolidado' ? 'consolidado_em' : 'cancelado_em';
   const ordenados = [...rows].sort((a, b) => String(b[campo] || '').localeCompare(String(a[campo] || '')));
-  wrap.innerHTML = ordenados.map(l => lancItemHtml(l, { showConsultor: true })).join('');
+  wrap.innerHTML = lancTableHtml(ordenados, { showConsultor: true, showAcao: false });
 }
 
 function renderTudo(){
@@ -227,7 +251,7 @@ async function abrirConsolidar(id){
   if(!l) return;
   const result = await showActionPanel({
     title: 'Consolidar lançamento',
-    subtitle: `${l.consultor_nome}\n${l.empresa_nome} · ${fmtDateBR(l.data_visita)} · ${round1(l.horas)}h · ${l.programa || ''}`,
+    subtitle: `${l.consultor_nome}\n${l.empresa_nome}${l.proposta ? ' · proposta ' + l.proposta : ''} · ${fmtDateBR(l.data_visita)} · ${round1(l.horas)}h`,
     fields: [
       { id: 'observacao', label: 'Observação (opcional)', type: 'text', placeholder: 'Ex.: lançado no SGSET' }
     ],

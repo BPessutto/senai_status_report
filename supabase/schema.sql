@@ -599,6 +599,8 @@ create table if not exists public.lancamentos (
   visita_id text not null,
   data_visita date not null,
   empresa_nome text not null,
+  proposta text,
+  descricao_visita text,
   municipio text,
   programa text not null default 'BP' check (programa in ('BP','MOVER')),
   consultor_id uuid not null references auth.users(id),
@@ -614,6 +616,16 @@ create table if not exists public.lancamentos (
   cancelado_por uuid references auth.users(id),
   cancelado_em timestamptz
 );
+
+-- Migração idempotente pra quando public.lancamentos já existe no banco (o
+-- CREATE TABLE acima não roda de novo nesse caso, então as colunas novas
+-- não apareceriam sem isso). Nullable de propósito: lançamentos criados
+-- antes desta coluna existir ficam com null (apoio.html mostra "—") — um
+-- backfill best-effort é possível a partir de assessorias.data->visitas,
+-- mas é rodado à parte, sob demanda, não por este schema.
+alter table public.lancamentos
+  add column if not exists proposta text,
+  add column if not exists descricao_visita text;
 
 -- Bloqueia duplicidade entre linhas ativas (pendente ou consolidado) do
 -- mesmo consultor na mesma visita, mas libera reenvio depois que a linha

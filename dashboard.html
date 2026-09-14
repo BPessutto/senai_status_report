@@ -1343,6 +1343,8 @@ async function abrirPainelLancamento(visitaId){
     visita_id: v.id,
     data_visita: v.dataISO,
     empresa_nome: assessoriaRow.cliente_nome || assessoriaRow.nome,
+    proposta: assessoriaRow.proposta || null,
+    descricao_visita: (v.resumo && v.resumo.length) ? v.resumo.join('\n') : null,
     municipio: assessoriaRow.municipio || null,
     programa: assessoriaRow.programa || 'BP',
     criado_por: session.user.id,
